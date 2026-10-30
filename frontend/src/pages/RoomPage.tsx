@@ -7,6 +7,7 @@ import { Chat } from "../room/Chat";
 import { Files } from "../room/Files";
 import { releaseRoomUrls } from "../room/fileUrls";
 import { People } from "../room/People";
+import { Present } from "../room/Present";
 import { Preview } from "../room/Preview";
 import { RoomHeader } from "../room/RoomHeader";
 import { useRoom, type EndReason } from "../room/useRoom";
@@ -32,6 +33,9 @@ export function RoomPage() {
 
 function Room({ session }: { session: RoomSession }) {
   const room = useRoom(session);
+  // The session with the room as it stands now (the host may have extended or locked it).
+  const live = useMemo(() => ({ ...session, room: room.room }), [session, room.room]);
+  const [presenting, setPresenting] = useState(false);
   const [panel, setPanel] = useState<Panel>("chat");
   const [side, setSide] = useState<Exclude<Panel, "chat">>("files");
   const [preview, setPreview] = useState<FileOut | null>(null);
@@ -39,6 +43,18 @@ function Room({ session }: { session: RoomSession }) {
   const seenCount = useRef(0);
 
   const closePreview = useCallback(() => setPreview(null), []);
+  const closePresent = useCallback(() => setPresenting(false), []);
+  const people = (
+    <People
+      session={live}
+      members={room.members}
+      isHost={room.isHost}
+      onPresent={() => setPresenting(true)}
+      onRemove={room.removeMember}
+      onExtend={room.extend}
+      onLock={room.setLocked}
+    />
+  );
   const showError = room.flash;
 
   useEffect(() => () => releaseRoomUrls(session.room.id), [session.room.id]);
@@ -76,7 +92,12 @@ function Room({ session }: { session: RoomSession }) {
 
   return (
     <div className="room" data-panel={panel} data-side={side}>
-      <RoomHeader session={session} connection={room.connection} onLeave={room.leave} />
+      <RoomHeader
+        session={live}
+        connection={room.connection}
+        onLeave={room.leave}
+        onPresent={() => setPresenting(true)}
+      />
 
       <nav className="room__tabs" aria-label="Room sections">
         {tabs.map(([id, label]) => (
@@ -87,13 +108,11 @@ function Room({ session }: { session: RoomSession }) {
       </nav>
 
       <div className="room__body">
-        <div className="room__people">
-          <People session={session} members={room.members} />
-        </div>
+        <div className="room__people">{people}</div>
 
         <div className="room__chat">
           <Chat
-            session={session}
+            session={live}
             connection={room.connection}
             messages={room.messages}
             files={room.files}
@@ -106,6 +125,8 @@ function Room({ session }: { session: RoomSession }) {
             onUpload={room.uploadFiles}
             onPreview={setPreview}
             onError={showError}
+            typingNames={room.typingNames}
+            onTyping={room.notifyTyping}
           />
         </div>
 
@@ -129,11 +150,10 @@ function Room({ session }: { session: RoomSession }) {
               onDismissUpload={room.dismissUpload}
               onPreview={setPreview}
               onError={showError}
+              onDownloadAll={room.downloadAll}
             />
           </div>
-          <div className="room__side-people">
-            <People session={session} members={room.members} />
-          </div>
+          <div className="room__side-people">{people}</div>
         </div>
       </div>
 
@@ -145,6 +165,8 @@ function Room({ session }: { session: RoomSession }) {
           </button>
         </div>
       )}
+
+      {presenting && <Present code={session.code} room={room.room} onClose={closePresent} />}
 
       <Preview file={preview} roomId={session.room.id} token={session.token} onClose={closePreview} onError={showError} />
     </div>
@@ -161,6 +183,10 @@ const ENDED: Record<EndReason, { title: string; body: (code: string) => string }
     title: "You've left the room.",
     body: (code) =>
       `Your place in it is gone. While it's still open you can come back as a new arrival with the code ${code}.`,
+  },
+  removed: {
+    title: "You've been asked to leave.",
+    body: () => "Whoever opened the room removed you from it. If you think that was a mistake, ask them for the code again.",
   },
   invalid: {
     title: "This room isn't open to this tab.",

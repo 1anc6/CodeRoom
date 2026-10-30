@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Wordmark } from "../components/Brand";
 import { DoorPanel, type DoorMode } from "../components/DoorPanel";
 import { ArrowRight } from "../components/Icons";
+import { ThemeToggle } from "../components/ThemeToggle";
 import { parseServerTime } from "../lib/format";
 import { stagger } from "../lib/stagger";
 import { loadSession } from "../session";
@@ -10,6 +11,8 @@ import { loadSession } from "../session";
 interface LandingState {
   mode?: DoorMode;
   hint?: string;
+  /** A code from a join link (/j/CODE), filled in for whoever opened it. */
+  code?: string;
 }
 
 export function Landing() {
@@ -36,17 +39,20 @@ export function Landing() {
     <div className="landing">
       <header className="topbar">
         <Wordmark />
-        {current ? (
-          <Link className="text-link topbar__action" to={`/room/${current.room.id}`}>
-            Back to room <span className="tabular">{current.code}</span>
-            <ArrowRight size={16} />
-          </Link>
-        ) : (
-          <button type="button" className="text-link topbar__action" onClick={openJoin}>
-            Have a code?
-            <ArrowRight size={16} />
-          </button>
-        )}
+        <div className="topbar__end">
+          {current ? (
+            <Link className="text-link topbar__action" to={`/room/${current.room.id}`}>
+              Back to room <span className="tabular">{current.code}</span>
+              <ArrowRight size={16} />
+            </Link>
+          ) : (
+            <button type="button" className="text-link topbar__action" onClick={openJoin}>
+              Have a code?
+              <ArrowRight size={16} />
+            </button>
+          )}
+          <ThemeToggle />
+        </div>
       </header>
 
       <main>
@@ -75,10 +81,16 @@ export function Landing() {
               onModeChange={setMode}
               focusRequest={focusRequest}
               hint={incoming.hint ?? null}
+              initialCode={incoming.code}
             />
           </div>
         </section>
       </main>
+
+      <footer className="landing__foot">
+        <span>Rooms close on their own. Nothing is kept.</span>
+        <span className="tabular">{new Date().getFullYear()}</span>
+      </footer>
     </div>
   );
 }

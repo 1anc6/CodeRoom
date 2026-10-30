@@ -38,6 +38,14 @@ class JoinRoomRequest(BaseModel):
     display_name: DisplayName
 
 
+class ExtendRoomRequest(BaseModel):
+    minutes: int = Field(ge=5)
+
+
+class LockRoomRequest(BaseModel):
+    locked: bool
+
+
 class RoomOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -45,6 +53,7 @@ class RoomOut(BaseModel):
     status: str
     created_at: datetime
     expires_at: datetime
+    locked: bool
 
 
 class ParticipantOut(BaseModel):
@@ -53,6 +62,7 @@ class ParticipantOut(BaseModel):
     id: uuid.UUID
     display_name: str
     joined_at: datetime
+    is_host: bool
 
 
 class RoomSessionOut(BaseModel):

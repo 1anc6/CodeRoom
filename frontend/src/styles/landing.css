@@ -18,7 +18,23 @@
   flex: none;
 }
 
+.topbar__end {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .topbar__action {
+  font-size: var(--step-small);
+}
+
+.landing__foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding-block: 20px 28px;
+  border-top: 1px solid var(--line);
+  color: var(--ink-soft);
   font-size: var(--step-small);
 }
 
@@ -35,7 +51,7 @@
   grid-template-columns: repeat(12, minmax(0, 1fr));
   column-gap: 24px;
   align-items: center;
-  padding-block: clamp(24px, 4vh, 56px) clamp(40px, 7vh, 96px);
+  padding-block: clamp(16px, 3vh, 48px) clamp(24px, 4vh, 64px);
 }
 
 .hero__copy {
@@ -66,13 +82,16 @@
 
 .hero__title-serif em {
   font-style: italic;
+  color: var(--accent-ink);
 }
 
+/* The lead reads in the headline's serif, so the pitch is one voice and the form below is the tool. */
 .hero__lead {
   margin-top: clamp(28px, 4vh, 40px);
-  max-width: 36ch;
-  font-size: clamp(1.125rem, 1rem + 0.4vw, 1.3125rem);
-  line-height: 1.5;
+  max-width: 34ch;
+  font-family: var(--font-heading);
+  font-size: clamp(1.25rem, 1.1rem + 0.45vw, 1.5rem);
+  line-height: 1.45;
 }
 
 .hero__aside {
@@ -126,9 +145,10 @@
 }
 
 .door__switch button[aria-pressed="true"] {
-  background: var(--ink);
-  color: var(--on-ink);
+  background: var(--card);
+  color: var(--ink);
   font-weight: 600;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--ink-strong) 14%, transparent), 0 0 0 1px var(--line); /* taste-skill-ignore: segmented control */
 }
 
 .door__switch button:not([aria-pressed="true"]):hover {
@@ -160,8 +180,10 @@
   margin-bottom: 10px;
   padding: 0;
   color: var(--ink-soft);
-  font-size: var(--step-small);
+  font-size: 0.75rem;
   font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .door__input {
@@ -184,7 +206,7 @@
 .door__input:focus {
   outline: none;
   border-color: var(--ink);
-  box-shadow: 0 0 0 4px rgba(180, 152, 107, 0.32); /* taste-skill-ignore: focus ring */
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 32%, transparent); /* taste-skill-ignore: focus ring */
 }
 
 .door__input[aria-invalid="true"] {
@@ -336,7 +358,7 @@
 
 .code-input__cell.is-active {
   border-color: var(--ink);
-  box-shadow: 0 0 0 4px rgba(180, 152, 107, 0.32); /* taste-skill-ignore: focus ring */
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 32%, transparent); /* taste-skill-ignore: focus ring */
 }
 
 .code-input__cell.is-active:not(.is-filled)::after {

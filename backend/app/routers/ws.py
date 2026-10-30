@@ -199,6 +199,12 @@ async def _handle_frame(websocket: WebSocket, conn: Connection, raw: str) -> Non
     match frame.get("type"):
         case "message.send":
             await _handle_message_send(websocket, conn, frame)
+        case "typing":
+            # Nothing is stored; the others just see "… is typing" for a few seconds. Clients send
+            # this at most every few seconds while someone types.
+            await _hub(websocket).broadcast(
+                conn.room_id, event("typing", participant_id=str(conn.participant_id)), exclude=conn
+            )
         case "ping":
             await websocket.send_json(event("pong"))
         case _:

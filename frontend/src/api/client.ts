@@ -1,4 +1,4 @@
-import type { FileList, FileOut, MessagePage, RoomDetails, RoomSession } from "./types";
+import type { FileList, FileOut, MessagePage, RoomDetails, RoomOut, RoomSession } from "./types";
 
 /** An API failure with the server's own message, status and any Retry-After hint. */
 export class ApiError extends Error {
@@ -85,6 +85,20 @@ export function leaveRoom(roomId: string, token: string): Promise<void> {
   return request<void>(`/rooms/${roomId}/leave`, { method: "DELETE" }, token);
 }
 
+// Host controls. The server checks that the caller opened the room.
+
+export function extendRoom(roomId: string, token: string, minutes: number): Promise<RoomOut> {
+  return request<RoomOut>(`/rooms/${roomId}/extend`, { method: "POST", body: JSON.stringify({ minutes }) }, token);
+}
+
+export function setRoomLocked(roomId: string, token: string, locked: boolean): Promise<RoomOut> {
+  return request<RoomOut>(`/rooms/${roomId}/lock`, { method: "POST", body: JSON.stringify({ locked }) }, token);
+}
+
+export function removeParticipant(roomId: string, token: string, participantId: string): Promise<void> {
+  return request<void>(`/rooms/${roomId}/participants/${participantId}`, { method: "DELETE" }, token);
+}
+
 export function getMessages(
   roomId: string,
   token: string,
@@ -108,6 +122,18 @@ export async function fetchFileBlob(roomId: string, token: string, fileId: strin
   if (!response.ok) {
     const body = await response.json().catch(() => null);
     throw new ApiError(response.status, messageFrom(body, "Couldn't download this file."), retryAfterFrom(response));
+  }
+  return response.blob();
+}
+
+/** Every file in the room as one zip, built by the server as it streams. */
+export async function fetchFilesZip(roomId: string, token: string): Promise<Blob> {
+  const response = await fetch(`${API}/rooms/${roomId}/files.zip`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new ApiError(response.status, messageFrom(body, "Couldn't download the files."), retryAfterFrom(response));
   }
   return response.blob();
 }

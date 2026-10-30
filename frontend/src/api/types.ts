@@ -5,12 +5,16 @@ export interface RoomOut {
   status: string;
   created_at: string;
   expires_at: string;
+  /** A locked room turns away new arrivals, even with the right code. */
+  locked: boolean;
 }
 
 export interface ParticipantOut {
   id: string;
   display_name: string;
   joined_at: string;
+  /** Whoever opened the room: they can extend it, lock it and ask people to leave. */
+  is_host: boolean;
 }
 
 export interface MemberOut extends ParticipantOut {
@@ -78,6 +82,8 @@ export type ServerFrame =
   | { type: "participant.left"; participant_id: string }
   | { type: "presence"; participant_id: string; online: boolean }
   | { type: "file.ready"; file: FileOut }
+  | { type: "room.updated"; room: RoomOut }
+  | { type: "typing"; participant_id: string }
   | { type: "room.expired" }
   | { type: "error"; code: string; detail: string; client_id: string | null }
   | { type: "pong" };

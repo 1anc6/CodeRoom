@@ -1,6 +1,6 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import type { FileOut } from "../api/types";
-import { Close, Paperclip } from "../components/Icons";
+import { Close, Download, Paperclip } from "../components/Icons";
 import { formatBytes } from "../lib/format";
 import { FileRow } from "./FileRow";
 import type { Upload } from "./useRoom";
@@ -21,9 +21,22 @@ interface FilesProps {
   onDismissUpload: (id: string) => void;
   onPreview: (file: FileOut) => void;
   onError: (message: string) => void;
+  onDownloadAll: () => Promise<void>;
 }
 
-export function Files({ roomId, token, files, uploads, disabled, onUpload, onDismissUpload, onPreview, onError }: FilesProps) {
+export function Files({
+  roomId,
+  token,
+  files,
+  uploads,
+  disabled,
+  onUpload,
+  onDismissUpload,
+  onPreview,
+  onError,
+  onDownloadAll,
+}: FilesProps) {
+  const [zipping, setZipping] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const used = files.reduce((sum, f) => sum + f.size_bytes, 0);
   const fraction = Math.min(1, used / ROOM_STORAGE_BYTES);
@@ -37,6 +50,22 @@ export function Files({ roomId, token, files, uploads, disabled, onUpload, onDis
         </h2>
         <span className="panel__count tabular">{files.length}</span>
       </div>
+
+      {files.length > 1 && (
+        <button
+          type="button"
+          className="btn btn--small btn--quiet files__all"
+          disabled={zipping}
+          onClick={async () => {
+            setZipping(true);
+            await onDownloadAll();
+            setZipping(false);
+          }}
+        >
+          <Download size={16} />
+          {zipping ? "Packing the files…" : `Download all ${files.length} as a zip`}
+        </button>
+      )}
 
       <div className="storage">
         <div className="storage__text">

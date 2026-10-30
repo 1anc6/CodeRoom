@@ -20,6 +20,7 @@ CLOSE_LEFT = 1000
 CLOSE_SEND_FAILED = 1011
 CLOSE_BAD_REQUEST = 4400
 CLOSE_UNAUTHORIZED = 4401
+CLOSE_REMOVED = 4403
 CLOSE_AUTH_TIMEOUT = 4408
 CLOSE_ROOM_EXPIRED = 4410
 CLOSE_TOO_MANY_CONNECTIONS = 4429
@@ -70,6 +71,14 @@ class RoomHub:
             if task is not None:
                 task.cancel()
         return conn.participant_id not in self.online_participant_ids(conn.room_id)
+
+    def reschedule(self, room_id: uuid.UUID, expires_at: datetime) -> None:
+        """Move the room's closing time, e.g. after the host extends it."""
+        task = self._expiry_tasks.pop(room_id, None)
+        if task is not None:
+            task.cancel()
+        if self._rooms.get(room_id):
+            self._expiry_tasks[room_id] = asyncio.create_task(self._close_when_expired(room_id, expires_at))
 
     async def broadcast(self, room_id: uuid.UUID, message: dict[str, Any], exclude: Connection | None = None) -> None:
         targets = [conn for conn in self._rooms.get(room_id, ()) if conn is not exclude]

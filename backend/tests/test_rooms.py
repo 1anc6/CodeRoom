@@ -271,3 +271,102 @@ async def test_leaving_revokes_the_session_and_frees_a_seat(make_settings, clien
 async def test_health(client):
     response = await client.get("/api/health")
     assert response.json() == {"status": "ok"}
+
+# --- Host controls --------------------------------------------------------------------
+
+
+async def test_whoever_opens_the_room_is_its_host(client):
+    alice = await create_room(client)
+    bob = (await join_room(client, alice["code"])).json()
+    assert alice["participant"]["is_host"] is True
+    assert bob["participant"]["is_host"] is False
+    assert alice["room"]["locked"] is False
+
+    details = await client.get(f"/api/rooms/{alice['room']['id']}", headers=auth(bob["token"]))
+    assert {p["display_name"]: p["is_host"] for p in details.json()["participants"]} == {"Alice": True, "Bob": False}
+
+
+async def test_host_can_extend_the_room(client):
+    alice = await create_room(client, lifetime_minutes=30)
+    before = datetime.fromisoformat(alice["room"]["expires_at"])
+    response = await client.post(
+        f"/api/rooms/{alice['room']['id']}/extend", json={"minutes": 30}, headers=auth(alice["token"])
+    )
+    assert response.status_code == 200, response.text
+    assert datetime.fromisoformat(response.json()["expires_at"]) - before == timedelta(minutes=30)
+
+
+async def test_extending_stops_at_the_longest_a_room_may_have_left(client):
+    alice = await create_room(client, lifetime_minutes=470)
+    url = f"/api/rooms/{alice['room']['id']}/extend"
+    response = await client.post(url, json={"minutes": 60}, headers=auth(alice["token"]))
+    assert response.status_code == 200
+    left = datetime.fromisoformat(response.json()["expires_at"]) - utcnow()
+    assert timedelta(minutes=479) < left <= timedelta(minutes=480)
+
+    again = await client.post(url, json={"minutes": 60}, headers=auth(alice["token"]))
+    assert again.status_code == 409
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "body"),
+    [
+        ("POST", "extend", {"minutes": 30}),
+        ("POST", "lock", {"locked": True}),
+    ],
+)
+async def test_only_the_host_can_change_the_room(client, method, path, body):
+    alice = await create_room(client)
+    bob = (await join_room(client, alice["code"])).json()
+    response = await client.request(
+        method, f"/api/rooms/{alice['room']['id']}/{path}", json=body, headers=auth(bob["token"])
+    )
+    assert response.status_code == 403
+
+
+async def test_locked_room_turns_away_new_arrivals_until_unlocked(client):
+    alice = await create_room(client)
+    url = f"/api/rooms/{alice['room']['id']}/lock"
+    locked = await client.post(url, json={"locked": True}, headers=auth(alice["token"]))
+    assert locked.json()["locked"] is True
+
+    refused = await join_room(client, alice["code"])
+    assert refused.status_code == 423
+
+    await client.post(url, json={"locked": False}, headers=auth(alice["token"]))
+    assert (await join_room(client, alice["code"])).status_code == 200
+
+
+async def test_host_can_remove_someone_and_their_session_stops_working(client):
+    alice = await create_room(client)
+    bob = (await join_room(client, alice["code"])).json()
+    room_id = alice["room"]["id"]
+
+    response = await client.delete(
+        f"/api/rooms/{room_id}/participants/{bob['participant']['id']}", headers=auth(alice["token"])
+    )
+    assert response.status_code == 204
+    assert (await client.get(f"/api/rooms/{room_id}", headers=auth(bob["token"]))).status_code == 401
+    details = await client.get(f"/api/rooms/{room_id}", headers=auth(alice["token"]))
+    assert [p["display_name"] for p in details.json()["participants"]] == ["Alice"]
+
+
+async def test_guests_cannot_remove_anyone_and_the_host_cannot_remove_themselves(client):
+    alice = await create_room(client)
+    bob = (await join_room(client, alice["code"])).json()
+    room_id = alice["room"]["id"]
+    alice_id = alice["participant"]["id"]
+
+    by_guest = await client.delete(f"/api/rooms/{room_id}/participants/{alice_id}", headers=auth(bob["token"]))
+    assert by_guest.status_code == 403
+    themselves = await client.delete(f"/api/rooms/{room_id}/participants/{alice_id}", headers=auth(alice["token"]))
+    assert themselves.status_code == 422
+
+
+async def test_cannot_remove_someone_from_another_room(client):
+    alice = await create_room(client)
+    carol = await create_room(client, name="Carol")
+    response = await client.delete(
+        f"/api/rooms/{alice['room']['id']}/participants/{carol['participant']['id']}", headers=auth(alice["token"])
+    )
+    assert response.status_code == 404

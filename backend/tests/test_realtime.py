@@ -14,6 +14,7 @@ from app.realtime import (
     CLOSE_AUTH_TIMEOUT,
     CLOSE_BAD_REQUEST,
     CLOSE_LEFT,
+    CLOSE_REMOVED,
     CLOSE_ROOM_EXPIRED,
     CLOSE_TOO_MANY_CONNECTIONS,
     CLOSE_UNAUTHORIZED,
@@ -396,3 +397,42 @@ def test_sending_into_an_expired_room_closes_the_socket(live_client):
 
     history = live_client.get(f"/api/rooms/{alice['room']['id']}/messages", headers=auth(alice["token"]))
     assert history.status_code == 410
+
+
+# --- Typing and host controls ---------------------------------------------------------
+
+
+def test_typing_reaches_everyone_else_but_is_not_echoed(live_client):
+    alice, bob = pair(live_client)
+    with connect(live_client, alice) as (alice_ws, _), connect(live_client, bob) as (bob_ws, _):
+        assert alice_ws.receive_json()["type"] == "presence"  # Bob came online
+        bob_ws.send_json({"type": "typing"})
+        assert alice_ws.receive_json() == {"type": "typing", "participant_id": bob["participant"]["id"]}
+        # Bob hears nothing back: the next thing he gets is the pong to his own ping.
+        bob_ws.send_json({"type": "ping"})
+        assert bob_ws.receive_json()["type"] == "pong"
+
+
+def test_removed_member_is_disconnected_and_the_room_is_told(live_client):
+    alice, bob = pair(live_client)
+    with connect(live_client, alice) as (alice_ws, _), connect(live_client, bob) as (bob_ws, _):
+        assert alice_ws.receive_json()["type"] == "presence"
+        response = live_client.delete(
+            f"/api/rooms/{alice['room']['id']}/participants/{bob['participant']['id']}", headers=auth(alice["token"])
+        )
+        assert response.status_code == 204
+        assert close_code(bob_ws) == CLOSE_REMOVED
+        assert alice_ws.receive_json() == {"type": "participant.left", "participant_id": bob["participant"]["id"]}
+
+
+def test_extending_and_locking_are_broadcast(live_client):
+    alice, bob = pair(live_client)
+    room_url = f"/api/rooms/{alice['room']['id']}"
+    with connect(live_client, bob) as (bob_ws, _):
+        live_client.post(f"{room_url}/extend", json={"minutes": 30}, headers=auth(alice["token"]))
+        extended = bob_ws.receive_json()
+        assert extended["type"] == "room.updated"
+        assert extended["room"]["expires_at"] > alice["room"]["expires_at"]
+
+        live_client.post(f"{room_url}/lock", json={"locked": True}, headers=auth(alice["token"]))
+        assert bob_ws.receive_json()["room"]["locked"] is True

@@ -1,13 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ApiError, getFiles, getMessages, leaveRoom, roomSocketUrl, uploadFile } from "../api/client";
-import type { FileOut, MemberOut, MessageOut, ReplyOut, RoomSession, ServerFrame } from "../api/types";
+import {
+  ApiError,
+  extendRoom,
+  fetchFilesZip,
+  getFiles,
+  getMessages,
+  leaveRoom,
+  removeParticipant,
+  roomSocketUrl,
+  setRoomLocked,
+  uploadFile,
+} from "../api/client";
+import type { FileOut, MemberOut, MessageOut, ReplyOut, RoomOut, RoomSession, ServerFrame } from "../api/types";
 import { makeId, parseServerTime } from "../lib/format";
+import { saveSession } from "../session";
 
 export const MAX_MESSAGE_LENGTH = 4000;
 export const MAX_FILE_BYTES = 25 * 1024 * 1024;
 
 export type Connection = "connecting" | "live" | "reconnecting" | "ended";
-export type EndReason = "left" | "expired" | "invalid";
+export type EndReason = "left" | "expired" | "invalid" | "removed";
 
 export interface ChatMessage extends MessageOut {
   clientId?: string;
@@ -27,9 +39,15 @@ export interface Upload {
 // Close codes after which reconnecting would not help (see the README's WebSocket section).
 const CLOSE_LEFT = 1000;
 const CLOSE_UNAUTHORIZED = 4401;
+const CLOSE_REMOVED = 4403;
 const CLOSE_EXPIRED = 4410;
 const CLOSE_TOO_MANY = 4429;
 const PING_INTERVAL_MS = 25_000;
+// "... is typing" shows this long after the last signal; signals go out at most this often.
+const TYPING_SHOWN_MS = 4000;
+const TYPING_SEND_MS = 2500;
+// Everyone hears once that the room is about to close.
+const WARN_BEFORE_MS = 5 * 60 * 1000;
 
 function endReasonForStatus(status: number): EndReason | null {
   if (status === 410) return "expired";
@@ -61,6 +79,11 @@ export function useRoom(session: RoomSession) {
   const [files, setFiles] = useState<FileOut[]>([]);
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
+  // The room as it stands now: the host can extend or lock it while it's open.
+  const [room, setRoom] = useState<RoomOut>(session.room);
+  // Who is typing, by participant id, with when to stop showing it.
+  const [typing, setTyping] = useState<Record<string, number>>({});
+  const lastTypingSent = useRef(0);
 
   const socketRef = useRef<WebSocket | null>(null);
   const messagesRef = useRef<ChatMessage[]>([]);
@@ -75,6 +98,15 @@ export function useRoom(session: RoomSession) {
   }, []);
 
   const flash = useCallback((text: string) => setNotice(text), []);
+
+  // Keep the saved session in step, so a refresh shows the new closing time.
+  const applyRoom = useCallback(
+    (next: RoomOut) => {
+      setRoom(next);
+      saveSession({ ...session, room: next });
+    },
+    [session],
+  );
 
   useEffect(() => {
     if (!notice) return;
@@ -136,6 +168,12 @@ export function useRoom(session: RoomSession) {
           break;
         case "message.new": {
           const { message, client_id } = frame;
+          setTyping((map) => {
+            if (!(message.participant_id in map)) return map;
+            const rest = { ...map };
+            delete rest[message.participant_id];
+            return rest;
+          });
           setMessages((list) => {
             if (client_id) {
               const index = list.findIndex((m) => m.clientId === client_id);
@@ -172,6 +210,12 @@ export function useRoom(session: RoomSession) {
         case "file.ready":
           setFiles((list) => (list.some((f) => f.id === frame.file.id) ? list : [...list, frame.file]));
           break;
+        case "room.updated":
+          applyRoom(frame.room);
+          break;
+        case "typing":
+          setTyping((map) => ({ ...map, [frame.participant_id]: Date.now() + TYPING_SHOWN_MS }));
+          break;
         case "room.expired":
           end("expired");
           break;
@@ -179,7 +223,7 @@ export function useRoom(session: RoomSession) {
           break;
       }
     },
-    [catchUp, end, flash],
+    [catchUp, end, flash, applyRoom],
   );
 
   // Initial files, then the live connection (which loads message history once it's ready).
@@ -221,6 +265,7 @@ export function useRoom(session: RoomSession) {
         if (disposed || endedRef.current) return;
         if (event.code === CLOSE_EXPIRED) return end("expired");
         if (event.code === CLOSE_UNAUTHORIZED) return end("invalid");
+        if (event.code === CLOSE_REMOVED) return end("removed");
         if (event.code === CLOSE_LEFT) return end("left");
         if (event.code === CLOSE_TOO_MANY) {
           flash("This room is open in too many tabs. Close one and this tab will reconnect.");
@@ -255,17 +300,51 @@ export function useRoom(session: RoomSession) {
     };
   }, [roomId, token, handleFrame, failRequest, end, flash]);
 
-  // The room closes at its expiry time even if the server's notice is missed.
+  // The room closes at its expiry time even if the server's notice is missed, and everyone is
+  // warned a few minutes before. Extending the room moves both.
   useEffect(() => {
-    const remaining = parseServerTime(session.room.expires_at) - Date.now();
+    const remaining = parseServerTime(room.expires_at) - Date.now();
     if (remaining <= 0) {
       end("expired");
       return;
     }
     // setTimeout can't wait longer than ~24.8 days; rooms last at most 8 hours.
     const timer = window.setTimeout(() => end("expired"), remaining);
+    const warning =
+      remaining > WARN_BEFORE_MS
+        ? window.setTimeout(
+            () => flash("This room closes in 5 minutes. Save any files you want to keep."),
+            remaining - WARN_BEFORE_MS,
+          )
+        : undefined;
+    return () => {
+      window.clearTimeout(timer);
+      window.clearTimeout(warning);
+    };
+  }, [room.expires_at, end, flash]);
+
+  // Drop "... is typing" once it goes quiet.
+  useEffect(() => {
+    const until = Object.values(typing);
+    if (!until.length) return;
+    const timer = window.setTimeout(
+      () => {
+        const now = Date.now();
+        setTyping((map) => Object.fromEntries(Object.entries(map).filter(([, end]) => end > now)));
+      },
+      Math.max(Math.min(...until) - Date.now(), 0) + 50,
+    );
     return () => window.clearTimeout(timer);
-  }, [session.room.expires_at, end]);
+  }, [typing]);
+
+  /** Tells the room this person is typing, at most every few seconds. */
+  const notifyTyping = useCallback(() => {
+    const ws = socketRef.current;
+    const now = Date.now();
+    if (!ws || ws.readyState !== WebSocket.OPEN || now - lastTypingSent.current < TYPING_SEND_MS) return;
+    lastTypingSent.current = now;
+    ws.send(JSON.stringify({ type: "typing" }));
+  }, []);
 
   const transmit = useCallback((clientId: string, content: string, replyTo: ReplyOut | null): boolean => {
     const ws = socketRef.current;
@@ -382,7 +461,81 @@ export function useRoom(session: RoomSession) {
     end("left");
   }, [roomId, token, end, failRequest]);
 
+  /** Host actions report their own errors: a refusal shouldn't end the room the way a lost session does. */
+  const hostAction = useCallback(
+    async <T,>(action: () => Promise<T>): Promise<T | undefined> => {
+      try {
+        return await action();
+      } catch (error) {
+        if (error instanceof ApiError && (error.status === 401 || error.status === 410)) failRequest(error);
+        else flash(error instanceof ApiError ? error.message : "Something went wrong. Try again.");
+        return undefined;
+      }
+    },
+    [failRequest, flash],
+  );
+
+  const extend = useCallback(
+    async (minutes: number) => {
+      const next = await hostAction(() => extendRoom(roomId, token, minutes));
+      if (next) {
+        applyRoom(next);
+        flash(`Added ${minutes} minutes.`);
+      }
+    },
+    [roomId, token, hostAction, applyRoom, flash],
+  );
+
+  const setLocked = useCallback(
+    async (locked: boolean) => {
+      const next = await hostAction(() => setRoomLocked(roomId, token, locked));
+      if (next) applyRoom(next);
+    },
+    [roomId, token, hostAction, applyRoom],
+  );
+
+  const removeMember = useCallback(
+    async (participantId: string) => {
+      const name = members.find((m) => m.id === participantId)?.display_name;
+      await hostAction(async () => {
+        await removeParticipant(roomId, token, participantId);
+        setMembers((list) => list.filter((m) => m.id !== participantId));
+        if (name) flash(`${name} has been asked to leave.`);
+      });
+    },
+    [roomId, token, members, hostAction, flash],
+  );
+
+  const downloadAll = useCallback(async () => {
+    try {
+      const blob = await fetchFilesZip(roomId, token);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `coderoom-${session.code}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch (error) {
+      failRequest(error);
+    }
+  }, [roomId, token, session.code, failRequest]);
+
+  const typingNames = Object.keys(typing)
+    .filter((id) => id !== session.participant.id)
+    .map((id) => members.find((m) => m.id === id)?.display_name)
+    .filter((name): name is string => Boolean(name));
+
   return {
+    room,
+    isHost: Boolean(session.participant.is_host),
+    typingNames,
+    notifyTyping,
+    extend,
+    setLocked,
+    removeMember,
+    downloadAll,
     connection,
     endReason,
     members,

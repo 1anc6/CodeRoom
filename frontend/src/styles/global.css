@@ -10,6 +10,7 @@
   --field: #d3c9bd;         /* Warm Grey */
   --tan: #ab9e8e;           /* Muted Tan: dots, tracks, never body text */
   --accent: #b4986b;        /* Antique Brass */
+  --accent-ink: #84683f;    /* derived: brass dark enough for text, 4.6:1 on the ground */
   --ink: #423e3b;           /* Dark Charcoal */
   --ink-strong: #2a2724;    /* derived: text set on brass */
   --ink-soft: #635a51;      /* derived: secondary text and placeholders, 6.1:1 on the ground, 5:1 on surface-2 */
@@ -18,15 +19,17 @@
   --online: #6f8a62;
   --danger: #9b3b2e;
   --danger-bg: #f3e3df;
+  color-scheme: light;
 
   /* Three display faces, each with one job, stand in for Carney, Botanica and Editor's Note:
      Bodoni Moda (Carney) sets the wordmark in capitals; Italiana (Botanica) sets the headline's
      capitals, large only, since its hairlines vanish when small; Playfair Display (Editor's Note)
-     sets headings, with its italic for emphasis. Geist for everything you read or type, and codes. */
+     sets headings, with its italic for emphasis. Jost, a geometric sans that sits well beside them,
+     for everything you read or type, and codes. */
   --font-brand: "Bodoni Moda", "Didot", "Bodoni MT", Georgia, serif;
   --font-display: "Italiana", "Didot", "Bodoni MT", Georgia, serif;
   --font-heading: "Playfair Display", "Didot", "Bodoni MT", Georgia, serif;
-  --font-text: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-text: "Jost", system-ui, -apple-system, "Segoe UI", sans-serif;
 
   --step-small: clamp(0.8125rem, 0.79rem + 0.1vw, 0.875rem);
   --step-body: clamp(1rem, 0.96rem + 0.2vw, 1.125rem);
@@ -39,6 +42,48 @@
   --radius-sm: 12px;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --dur: 220ms;
+}
+
+/* Dark: the same warm palette at night. It follows the system unless the theme switch has picked
+   one, which sets data-theme on <html>. Text on brass and on the pale avatar tints stays dark. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1c1a18;
+    --card: #24211f;
+    --surface: #2d2a27;
+    --surface-2: #37332f;
+    --field: #4a443e;
+    --tan: #8a7e70;
+    --accent: #c4a878;
+    --accent-ink: #d6bd8f;
+    --ink: #ece7e1;
+    --ink-soft: #b3a99d;
+    --on-ink: #1c1a18;
+    --line: rgba(236, 231, 225, 0.12);
+    --online: #8fae80;
+    --danger: #e59484;
+    --danger-bg: #3b2622;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #1c1a18;
+  --card: #24211f;
+  --surface: #2d2a27;
+  --surface-2: #37332f;
+  --field: #4a443e;
+  --tan: #8a7e70;
+  --accent: #c4a878;
+  --accent-ink: #d6bd8f;
+  --ink: #ece7e1;
+  --ink-soft: #b3a99d;
+  --on-ink: #1c1a18;
+  --line: rgba(236, 231, 225, 0.12);
+  --online: #8fae80;
+  --danger: #e59484;
+  --danger-bg: #3b2622;
+  color-scheme: dark;
 }
 
 *,
@@ -221,7 +266,7 @@ video {
   width: 32px;
   height: 32px;
   border-radius: 999px;
-  color: var(--ink);
+  color: var(--ink-strong);
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.02em;

@@ -57,7 +57,9 @@ async def current_members(session: AsyncSession, hub: RoomHub, room_id: uuid.UUI
     )
     online = hub.online_participant_ids(room_id)
     return [
-        MemberOut(id=p.id, display_name=p.display_name, joined_at=p.joined_at, online=p.id in online)
+        MemberOut(
+            id=p.id, display_name=p.display_name, joined_at=p.joined_at, is_host=p.is_host, online=p.id in online
+        )
         for p in participants
     ]
 

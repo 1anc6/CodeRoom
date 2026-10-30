@@ -298,3 +298,29 @@ async def test_missing_stored_object_is_not_found_rather_than_a_crash(client, st
 
     response = await client.get(f"{files_url(alice)}/{file_id}", headers=auth(alice["token"]))
     assert response.status_code == 404
+
+
+# --- Downloading everything as a zip -------------------------------------------------
+
+
+async def test_all_files_download_as_one_zip_with_unique_names(client):
+    import io
+    import zipfile
+
+    alice = await create_room(client)
+    for content, name in ((PNG, "photo.png"), (PDF, "notes.pdf"), (PNG, "photo.png")):
+        assert (await upload(client, alice, content, name)).status_code == 201
+
+    response = await client.get(files_url(alice) + ".zip", headers=auth(alice["token"]))
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/zip"
+    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        assert archive.namelist() == ["photo.png", "notes.pdf", "photo (2).png"]
+        assert archive.read("notes.pdf") == PDF
+        assert archive.read("photo (2).png") == PNG
+
+
+async def test_zip_needs_a_member_and_at_least_one_file(client):
+    alice = await create_room(client)
+    assert (await client.get(files_url(alice) + ".zip")).status_code == 401
+    assert (await client.get(files_url(alice) + ".zip", headers=auth(alice["token"]))).status_code == 404

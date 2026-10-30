@@ -135,13 +135,20 @@ by create or join. Tokens are never put in URLs.
 | POST | `/api/rooms/{room_id}/files?name=<file name>` | Upload a file. The body is the raw file bytes. See below. |
 | GET | `/api/rooms/{room_id}/files` | The room's files (newest 200), oldest first. |
 | GET | `/api/rooms/{room_id}/files/{file_id}` | Download a file. |
+| GET | `/api/rooms/{room_id}/files.zip` | Every file in the room as one zip, streamed as it's built (`404` if there are none). Repeated names become `name (2).ext`. |
 | DELETE | `/api/rooms/{room_id}/leave` | Leave the room. The session token stops working and open sockets close. |
+| POST | `/api/rooms/{room_id}/extend` | Host only. Body: `minutes` (≥ 5). Adds time, up to 8 hours left in total (`409` once at that cap). |
+| POST | `/api/rooms/{room_id}/lock` | Host only. Body: `locked`. A locked room refuses new joins with `423`; members stay in. |
+| DELETE | `/api/rooms/{room_id}/participants/{participant_id}` | Host only. Removes someone: their token stops working and their sockets close with `4403`. |
 | WS | `/api/rooms/{room_id}/ws` | Real-time connection. See below. |
 | GET | `/api/health` | Health check. |
 
 Status codes worth knowing: `404` unknown or expired code on join, `409` room full, `410` room expired,
-`413` file too large or room out of space, `415` file type not allowed, `429` rate limited (with
-`Retry-After`).
+`413` file too large or room out of space, `415` file type not allowed, `423` room locked, `403` a
+host-only action by someone else, `429` rate limited (with `Retry-After`).
+
+Whoever creates a room is its host (`is_host` on their participant record). Rooms carry `locked`.
+Share links take the form `/j/<code>`: the front end opens "Join with a code" with the code filled in.
 
 ### Files
 
@@ -198,6 +205,7 @@ The server replies with `ready`, then streams events.
 |---|---|---|
 | client → server | `auth` | `token` |
 | client → server | `message.send` | `content` (1–4000 chars), optional `client_id` (≤ 64 chars), optional `reply_to` (`{"kind": "message" \| "file", "id": ...}` in the same room) |
+| client → server | `typing` | sent at most every few seconds while someone types; nothing is stored |
 | client → server | `ping` | |
 | server → client | `ready` | `me`, `participants` (each with `online`) |
 | server → client | `message.new` | `message`, `client_id` (echoes the sender's, so it can match its pending message) |
@@ -205,6 +213,8 @@ The server replies with `ready`, then streams events.
 | server → client | `participant.left` | `participant_id` |
 | server → client | `file.ready` | `file` (see Files above) |
 | server → client | `presence` | `participant_id`, `online` (sent when someone's first tab opens or last tab closes) |
+| server → client | `typing` | `participant_id` (not echoed to the sender's own connection) |
+| server → client | `room.updated` | `room` (after the host extends or locks it) |
 | server → client | `room.expired` | sent just before the server closes every socket in the room |
 | server → client | `error` | `code`, `detail`, `client_id`. The connection stays open. |
 | server → client | `pong` | |
@@ -217,11 +227,11 @@ A message that replies to something carries `reply_to`: `kind`, `id`, `participa
 `mime_type` (files only). It is `null` for ordinary messages.
 
 Close codes: `1000` left the room, `1011` server couldn't deliver to this client, `4400` bad first
-frame, `4401` invalid session, `4408` no auth frame in time, `4410` room expired, `4429` too many open
-connections (5 per participant).
+frame, `4401` invalid session, `4403` removed by the host, `4408` no auth frame in time, `4410` room
+expired, `4429` too many open connections (5 per participant).
 
 Suggested client behaviour on reconnect: reconnect with backoff unless the close code is `1000`,
-`4401` or `4410`, then fetch `messages?after=<last message id you have>` to fill the gap.
+`4401`, `4403` or `4410`, then fetch `messages?after=<last message id you have>` to fill the gap.
 
 Messages are stored before they are broadcast, so anything a client receives is already in history.
 Connections live in process memory, which suits a single app instance. Running several instances

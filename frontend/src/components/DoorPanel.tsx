@@ -28,6 +28,7 @@ interface DoorPanelProps {
 function friendlyError(error: unknown, mode: DoorMode): string {
   if (!(error instanceof ApiError)) return "Something went wrong. Try again.";
   if (error.status === 404) return "No open room has that code. Check it with whoever made the room.";
+  if (error.status === 423) return "That room is locked, so nobody new can join. Ask whoever made it to unlock it.";
   if (error.status === 409) {
     return mode === "create" ? "That code is already in use. Choose another." : "That room is full. Twenty people is the limit.";
   }

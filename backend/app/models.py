@@ -2,7 +2,7 @@ import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
 
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, MetaData, String, Text, text
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Index, MetaData, String, Text, text
 from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
@@ -64,6 +64,8 @@ class Room(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
     expires_at: Mapped[datetime] = mapped_column(UTCDateTime())
     last_activity_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    # A locked room turns away new arrivals, even with the right code. Members stay in.
+    locked: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
 
     participants: Mapped[list["Participant"]] = relationship(
         back_populates="room", cascade="all, delete-orphan", passive_deletes=True
@@ -98,6 +100,8 @@ class Participant(Base):
     last_seen_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
     # Set when the participant leaves; their session token stops working from then on.
     left_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    # Whoever opened the room. Only they can extend it, lock it or ask someone to leave.
+    is_host: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
 
     room: Mapped[Room] = relationship(back_populates="participants")
 

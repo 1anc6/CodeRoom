@@ -6,7 +6,10 @@ the first bytes, and stop reading the moment a size limit is crossed.
 """
 
 import uuid
+import zipfile
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from pathlib import PurePath
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
@@ -228,6 +231,85 @@ async def list_files(me: CurrentParticipant, session: SessionDep) -> FileListOut
     rows = rows[:_LIST_LIMIT]
     rows.reverse()
     return FileListOut(files=[file_out(r) for r in rows], has_more=has_more)
+
+
+class _ZipSink:
+    """A write-only, unseekable target for ZipFile. It collects what's written so the archive can
+    be streamed as it's built; zipfile adds data descriptors since it can't seek back."""
+
+    def __init__(self) -> None:
+        self._chunks: list[bytes] = []
+
+    def write(self, data: bytes) -> int:
+        self._chunks.append(bytes(data))
+        return len(data)
+
+    def flush(self) -> None:
+        pass
+
+    def drain(self) -> bytes:
+        data = b"".join(self._chunks)
+        self._chunks.clear()
+        return data
+
+
+def _archive_names(records: list[RoomFile]) -> list[str]:
+    """Each file's name inside the zip, with "name (2).ext" for repeats."""
+    seen: set[str] = set()
+    names = []
+    for record in records:
+        path = PurePath(record.original_name)
+        name, n = record.original_name, 1
+        while name.lower() in seen:
+            n += 1
+            name = f"{path.stem} ({n}){path.suffix}"
+        seen.add(name.lower())
+        names.append(name)
+    return names
+
+
+@router.get("/{room_id}/files.zip")
+async def download_all_files(me: CurrentParticipant, request: Request, session: SessionDep) -> StreamingResponse:
+    """Every file in the room as one zip, built and streamed on the fly."""
+    records = list(
+        await session.scalars(
+            select(RoomFile)
+            .where(RoomFile.room_id == me.room_id, RoomFile.deleted_at.is_(None))
+            .order_by(RoomFile.created_at, RoomFile.id)
+        )
+    )
+    if not records:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="No files have been shared yet")
+    storage = _storage(request)
+
+    async def archive() -> AsyncIterator[bytes]:
+        sink = _ZipSink()
+        with zipfile.ZipFile(sink, "w", zipfile.ZIP_DEFLATED) as zf:  # type: ignore[arg-type]
+            for record, name in zip(records, _archive_names(records), strict=True):
+                try:
+                    chunks = await storage.open(record.object_key)
+                except FileNotFoundError:
+                    continue  # deleted by cleanup since the listing; leave it out
+                info = zipfile.ZipInfo(name, date_time=record.created_at.timetuple()[:6])
+                info.compress_type = zipfile.ZIP_DEFLATED
+                info.file_size = record.size_bytes
+                with zf.open(info, "w") as entry:
+                    async for chunk in chunks:
+                        entry.write(chunk)
+                        if data := sink.drain():
+                            yield data
+                yield sink.drain()
+        yield sink.drain()
+
+    return StreamingResponse(
+        archive(),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": content_disposition("coderoom-files.zip"),
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "private, no-store",
+        },
+    )
 
 
 @router.get("/{room_id}/files/{file_id}")

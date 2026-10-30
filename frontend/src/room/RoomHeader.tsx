@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import type { RoomSession } from "../api/types";
 import { Wordmark } from "../components/Brand";
-import { Door } from "../components/Icons";
+import { Door, Lock, Present } from "../components/Icons";
+import { ThemeToggle } from "../components/ThemeToggle";
 import { formatClock, formatRemaining, parseServerTime } from "../lib/format";
 import { CopyCode } from "./CopyCode";
 import type { Connection } from "./useRoom";
@@ -18,13 +19,14 @@ interface RoomHeaderProps {
   session: RoomSession;
   connection: Connection;
   onLeave: () => Promise<void>;
+  onPresent: () => void;
 }
 
 /**
  * One bar: the room's code as the page title, its connection and closing time, and the way out.
  * The time left runs along its bottom edge.
  */
-export function RoomHeader({ session, connection, onLeave }: RoomHeaderProps) {
+export function RoomHeader({ session, connection, onLeave, onPresent }: RoomHeaderProps) {
   const now = useNow(1000);
   const created = parseServerTime(session.room.created_at);
   const expires = parseServerTime(session.room.expires_at);
@@ -59,6 +61,15 @@ export function RoomHeader({ session, connection, onLeave }: RoomHeaderProps) {
           <span className="room-header__label">Room</span> {session.code}
         </h1>
         <CopyCode code={session.code} className="room-header__copy" />
+        <button
+          type="button"
+          className="icon-btn icon-btn--small room-header__present"
+          onClick={onPresent}
+          aria-label="Show the code large, with a QR code"
+          title="Show the code large, with a QR code"
+        >
+          <Present size={16} />
+        </button>
       </div>
 
       <p className="room-header__status">
@@ -66,6 +77,12 @@ export function RoomHeader({ session, connection, onLeave }: RoomHeaderProps) {
           <span className="conn__dot" aria-hidden="true" />
           {CONNECTION_TEXT[connection]}
         </span>
+        {session.room.locked && (
+          <span className="room-header__locked">
+            <Lock size={14} />
+            Locked
+          </span>
+        )}
         <span className="room-header__left tabular">
           {closingSoon ? "Closing in " : "Closes in "}
           {formatRemaining(remaining)}
@@ -74,6 +91,7 @@ export function RoomHeader({ session, connection, onLeave }: RoomHeaderProps) {
       </p>
 
       <div className="room-header__end">
+        <ThemeToggle className="icon-btn--small" />
         {confirming ? (
           <span className="leave-confirm">
             <button type="button" className="btn btn--small" onClick={leave} disabled={leaving}>

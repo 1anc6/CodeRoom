@@ -59,6 +59,15 @@ interface ChatProps {
   onUpload: (files: File[]) => void;
   onPreview: (file: FileOut) => void;
   onError: (message: string) => void;
+  /** Names of the others typing right now. */
+  typingNames: string[];
+  onTyping: () => void;
+}
+
+function typingText(names: string[]): string {
+  if (names.length === 1) return `${names[0]} is typing…`;
+  if (names.length === 2) return `${names[0]} and ${names[1]} are typing…`;
+  return `${names.length} people are typing…`;
 }
 
 export function Chat({
@@ -74,6 +83,8 @@ export function Chat({
   onRetry,
   onUpload,
   onPreview,
+  typingNames,
+  onTyping,
   onError,
 }: ChatProps) {
   const meId = session.participant.id;
@@ -390,6 +401,9 @@ export function Chat({
             </button>
           </div>
         )}
+        <p className="composer__typing" aria-live="polite">
+          {typingNames.length > 0 && typingText(typingNames)}
+        </p>
         <div className="composer__row">
           <button
             type="button"
@@ -423,7 +437,10 @@ export function Chat({
               rows={1}
               value={draft}
               placeholder={live ? (replyTo ? "Write a reply" : "Write to the room") : "Reconnecting, hold on…"}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                if (e.target.value.trim()) onTyping();
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Escape" && replyTo) {
                   e.preventDefault();
