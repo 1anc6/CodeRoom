@@ -37,6 +37,16 @@ class Settings(BaseSettings):
     upload_rate_limit: int = 10
     upload_rate_window_seconds: int = 60
 
+    # Expired-room cleanup. Runs inside the API process unless disabled, in which case schedule
+    # `python -m app.cleanup` instead (e.g. as a cron job).
+    cleanup_in_app: bool = True
+    cleanup_interval_seconds: float = 60
+    cleanup_batch_size: int = 50
+    # How often to look for stray stored objects, and how old one must be before it counts as
+    # stray (so uploads still in progress are left alone).
+    reconcile_interval_seconds: float = 3600
+    orphan_grace_seconds: int = 3600
+
 
 @lru_cache
 def get_settings() -> Settings:

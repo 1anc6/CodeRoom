@@ -51,6 +51,8 @@ def make_settings(tmp_path) -> Callable[..., Settings]:
             "database_url": TEST_DATABASE_URL or f"sqlite+aiosqlite:///{tmp_path / 'test.db'}",
             "code_hash_key": "test-code-hash-key-0123456789abcdef",
             "storage_dir": str(tmp_path / "uploads"),
+            # Tests drive cleanup directly; the ones about the background worker turn it on.
+            "cleanup_in_app": False,
             **overrides,
         }
         return Settings(_env_file=None, **values)

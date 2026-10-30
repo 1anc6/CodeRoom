@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.db import get_session
-from app.models import Participant, utcnow
+from app.models import Participant, Room, utcnow
 from app.security import hash_session_token
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
@@ -31,6 +31,14 @@ async def find_participant(session: AsyncSession, room_id: uuid.UUID, token: str
     )
 
 
+async def room_is_closed(session: AsyncSession, room_id: uuid.UUID) -> bool:
+    """Whether this room existed but is no longer open. Used after a token fails to match, so
+    members of a room that has been cleaned up (participants deleted) hear "expired", not
+    "invalid session". Room ids are random and only known to members, so this reveals nothing."""
+    room = await session.get(Room, room_id)
+    return room is not None and not room.is_open(utcnow())
+
+
 async def get_current_participant(
     room_id: uuid.UUID,
     session: SessionDep,
@@ -45,13 +53,14 @@ async def get_current_participant(
     if credentials is None:
         raise unauthorized
 
+    expired = HTTPException(status.HTTP_410_GONE, detail="This room has expired")
     participant = await find_participant(session, room_id, credentials.credentials)
     if participant is None:
-        raise unauthorized
+        raise expired if await room_is_closed(session, room_id) else unauthorized
 
     now = utcnow()
     if not participant.room.is_open(now):
-        raise HTTPException(status.HTTP_410_GONE, detail="This room has expired")
+        raise expired
 
     participant.last_seen_at = now
     await session.commit()

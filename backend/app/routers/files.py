@@ -29,7 +29,7 @@ from app.file_types import (
 from app.models import Participant, Room, RoomFile, utcnow
 from app.realtime import RoomHub, event
 from app.schemas import FileListOut, FileOut
-from app.storage import FileStorage
+from app.storage import FileStorage, room_prefix
 
 router = APIRouter(prefix="/api/rooms", tags=["files"])
 
@@ -160,7 +160,7 @@ async def upload_file(
     )
     storage = _storage(request)
     # A random key: the client's file name never reaches the storage path.
-    key = f"rooms/{me.room_id}/{uuid.uuid4().hex}"
+    key = room_prefix(me.room_id) + uuid.uuid4().hex
     try:
         await storage.save(key, _inspect(request, inspection))
     except _Rejected as rejected:

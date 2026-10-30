@@ -2,15 +2,38 @@
 
 The app talks to FileStorage only, so the local-disk implementation used in development can
 be swapped for Cloudflare R2 (or any S3-compatible store) without touching the routes.
+
+Every object of a room is stored under room_prefix(room_id), so a room's files can be found and
+removed together, including stray objects the database doesn't know about.
 """
 
+import os
+import shutil
+import uuid
 from collections.abc import AsyncIterable, AsyncIterator
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 
 import anyio
 
+from app.config import Settings
+
 _CHUNK_SIZE = 64 * 1024
+# Suffix of objects still being written. One left behind is an abandoned upload.
+PARTIAL_SUFFIX = ".part"
+
+
+def room_prefix(room_id: uuid.UUID) -> str:
+    return f"rooms/{room_id}/"
+
+
+@dataclass(frozen=True)
+class StoredObject:
+    key: str
+    size: int
+    modified_at: datetime
 
 
 class FileStorage(Protocol):
@@ -22,6 +45,12 @@ class FileStorage(Protocol):
 
     async def delete(self, key: str) -> None:
         """Delete key. Deleting a missing key is not an error, so retries are safe."""
+
+    async def delete_prefix(self, prefix: str) -> None:
+        """Delete every object under prefix. Missing prefixes are not an error."""
+
+    async def list_objects(self, prefix: str) -> list[StoredObject]:
+        """Every object under prefix, including partially written ones."""
 
 
 class LocalFileStorage:
@@ -40,7 +69,7 @@ class LocalFileStorage:
         await anyio.Path(path.parent).mkdir(parents=True, exist_ok=True)
         # Write to a temporary name and rename at the end, so a half-written file never
         # appears under its real key.
-        partial = path.with_name(path.name + ".part")
+        partial = path.with_name(path.name + PARTIAL_SUFFIX)
         try:
             async with await anyio.open_file(partial, "wb") as file:
                 async for chunk in chunks:
@@ -63,3 +92,41 @@ class LocalFileStorage:
 
     async def delete(self, key: str) -> None:
         await anyio.Path(self._path(key)).unlink(missing_ok=True)
+
+    async def delete_prefix(self, prefix: str) -> None:
+        path = self._path(prefix)
+
+        def _remove() -> None:
+            try:
+                shutil.rmtree(path)
+            except FileNotFoundError:
+                pass
+
+        await anyio.to_thread.run_sync(_remove)
+
+    async def list_objects(self, prefix: str) -> list[StoredObject]:
+        base = self._path(prefix)
+
+        def _walk() -> list[StoredObject]:
+            found = []
+            for directory, _subdirs, filenames in os.walk(base):
+                for filename in filenames:
+                    path = Path(directory, filename)
+                    try:
+                        stat = path.stat()
+                    except FileNotFoundError:  # removed while we were walking
+                        continue
+                    found.append(
+                        StoredObject(
+                            key=path.relative_to(self.root).as_posix(),
+                            size=stat.st_size,
+                            modified_at=datetime.fromtimestamp(stat.st_mtime, UTC),
+                        )
+                    )
+            return found
+
+        return await anyio.to_thread.run_sync(_walk)
+
+
+def create_storage(settings: Settings) -> FileStorage:
+    return LocalFileStorage(settings.storage_dir)

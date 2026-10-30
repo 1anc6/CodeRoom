@@ -14,7 +14,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import joinedload
 
 from app.config import Settings
-from app.deps import find_participant
+from app.deps import find_participant, room_is_closed
 from app.messages import current_members, message_out
 from app.models import Message, Participant, utcnow
 from app.realtime import (
@@ -73,7 +73,10 @@ async def _authenticate(websocket: WebSocket, room_id: uuid.UUID) -> Participant
     async with websocket.app.state.sessionmaker() as session:
         participant = await find_participant(session, room_id, token)
         if participant is None:
-            await websocket.close(CLOSE_UNAUTHORIZED, "Invalid room session")
+            if await room_is_closed(session, room_id):
+                await websocket.close(CLOSE_ROOM_EXPIRED, "Room expired")
+            else:
+                await websocket.close(CLOSE_UNAUTHORIZED, "Invalid room session")
             return None
         now = utcnow()
         if not participant.room.is_open(now):
@@ -122,10 +125,11 @@ async def _handle_message_send(websocket: WebSocket, conn: Connection, frame: di
         participant = await session.get(Participant, conn.participant_id, options=[joinedload(Participant.room)])
         now = utcnow()
         # Re-check access on every message: the participant may have left or the room expired.
-        if participant is None or participant.left_at is not None:
+        # A missing participant means the room was already cleaned up, which deletes them.
+        if participant is not None and participant.left_at is not None:
             await websocket.close(CLOSE_UNAUTHORIZED, "Invalid room session")
             raise _Closed
-        if not participant.room.is_open(now):
+        if participant is None or not participant.room.is_open(now):
             await websocket.send_json(event("room.expired"))
             await websocket.close(CLOSE_ROOM_EXPIRED, "Room expired")
             raise _Closed
