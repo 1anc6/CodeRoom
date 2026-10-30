@@ -53,9 +53,10 @@ export function Landing() {
         <section className="hero" aria-labelledby="hero-title">
           <div className="hero__copy">
             <h1 id="hero-title" className="hero__title rise">
-              Five digits.
-              <br />
-              One room.
+              <span className="hero__title-caps">Five digits.</span>
+              <span className="hero__title-serif">
+                One <em>room.</em>
+              </span>
             </h1>
             <p className="hero__lead rise" style={stagger(1)}>
               Open a room, read the code out loud, and chat and pass files with whoever types it in. When time runs

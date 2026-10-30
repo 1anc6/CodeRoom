@@ -19,10 +19,13 @@
   --danger: #9b3b2e;
   --danger-bg: #f3e3df;
 
-  /* Italiana, a thin high-contrast display face (a free stand-in for Cosi Times), for headings, the
-     wordmark and codes; Geist for everything you read or type, with tabular figures for clocks and sizes.
-     Italiana has one weight, so display text stays at 400. */
+  /* Three display faces, each with one job, stand in for Carney, Botanica and Editor's Note:
+     Bodoni Moda (Carney) sets the wordmark in capitals; Italiana (Botanica) sets the headline's
+     capitals, large only, since its hairlines vanish when small; Playfair Display (Editor's Note)
+     sets headings, with its italic for emphasis. Geist for everything you read or type, and codes. */
+  --font-brand: "Bodoni Moda", "Didot", "Bodoni MT", Georgia, serif;
   --font-display: "Italiana", "Didot", "Bodoni MT", Georgia, serif;
+  --font-heading: "Playfair Display", "Didot", "Bodoni MT", Georgia, serif;
   --font-text: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
 
   --step-small: clamp(0.8125rem, 0.79rem + 0.1vw, 0.875rem);
@@ -68,10 +71,10 @@ h1,
 h2,
 h3 {
   margin: 0;
-  font-family: var(--font-display);
-  font-weight: 400;
+  font-family: var(--font-heading);
+  font-weight: 500;
   letter-spacing: 0;
-  line-height: 1;
+  line-height: 1.15;
   text-wrap: balance;
 }
 
@@ -202,10 +205,11 @@ video {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  font-family: var(--font-display);
-  font-weight: 400;
-  font-size: 1.625rem;
-  letter-spacing: 0.01em;
+  font-family: var(--font-brand);
+  font-weight: 500;
+  font-size: 1.125rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   text-decoration: none;
 }
 

@@ -42,17 +42,37 @@
   grid-column: 1 / span 6;
 }
 
+/* Two faces in one headline: Italiana capitals over a Playfair line with an italic word. */
 .hero__title {
-  font-size: var(--step-display);
+  font-weight: 400;
   line-height: 1;
-  letter-spacing: -0.01em;
+}
+
+.hero__title-caps {
+  display: block;
+  font-family: var(--font-display);
+  font-size: calc(var(--step-display) * 0.78);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.hero__title-serif {
+  display: block;
+  margin-top: 0.08em;
+  font-family: var(--font-heading);
+  font-size: var(--step-display);
+  letter-spacing: -0.02em;
+}
+
+.hero__title-serif em {
+  font-style: italic;
 }
 
 .hero__lead {
   margin-top: clamp(28px, 4vh, 40px);
-  max-width: 32ch;
-  font-size: var(--step-lead);
-  line-height: 1.4;
+  max-width: 36ch;
+  font-size: clamp(1.125rem, 1rem + 0.4vw, 1.3125rem);
+  line-height: 1.5;
 }
 
 .hero__aside {
@@ -97,7 +117,7 @@
   border-radius: 999px;
   background: transparent;
   color: var(--ink-soft);
-  font-weight: 600;
+  font-weight: 500;
   font-size: var(--step-small);
   transition:
     background-color 260ms var(--ease-out),
@@ -108,6 +128,7 @@
 .door__switch button[aria-pressed="true"] {
   background: var(--ink);
   color: var(--on-ink);
+  font-weight: 600;
 }
 
 .door__switch button:not([aria-pressed="true"]):hover {
@@ -138,8 +159,9 @@
   display: block;
   margin-bottom: 10px;
   padding: 0;
+  color: var(--ink-soft);
   font-size: var(--step-small);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .door__input {
@@ -191,7 +213,7 @@
   gap: 10px;
   min-height: 44px;
   font-size: var(--step-small);
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -228,7 +250,7 @@
   border-radius: 999px;
   background: var(--surface);
   font-size: var(--step-small);
-  font-weight: 600;
+  font-weight: 500;
   text-align: center;
   line-height: 1.1;
   transition:
@@ -357,6 +379,7 @@
 .door__submit {
   width: 100%;
   min-height: 56px;
+  font-size: 1rem;
   margin-top: 20px;
 }
 

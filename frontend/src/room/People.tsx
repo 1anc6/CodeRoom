@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import type { MemberOut, RoomSession } from "../api/types";
 import { initials, tintFor } from "../lib/format";
 import { CopyCode } from "./CopyCode";
@@ -54,7 +55,11 @@ export function People({ session, members }: PeopleProps) {
       <div className="invite">
         <h3 className="invite__title">Bring someone in</h3>
         <p className="invite__text">Read out this code. Anyone who types it can join until the room closes.</p>
-        <div className="invite__code tabular" aria-hidden="true">
+        <div
+          className="invite__code tabular"
+          style={{ "--cols": Math.min(session.code.length, 6) } as CSSProperties}
+          aria-hidden="true"
+        >
           {session.code.split("").map((d, i) => (
             <span key={i}>{d}</span>
           ))}
