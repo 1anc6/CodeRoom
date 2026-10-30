@@ -21,14 +21,11 @@
   --danger-bg: #f3e3df;
   color-scheme: light;
 
-  /* Three display faces, each with one job, stand in for Carney, Botanica and Editor's Note:
-     Bodoni Moda (Carney) sets the wordmark in capitals; Italiana (Botanica) sets the headline's
-     capitals, large only, since its hairlines vanish when small; Playfair Display (Editor's Note)
-     sets headings, with its italic for emphasis. Jost, a geometric sans that sits well beside them,
-     for everything you read or type, and codes. */
-  --font-brand: "Bodoni Moda", "Didot", "Bodoni MT", Georgia, serif;
-  --font-display: "Italiana", "Didot", "Bodoni MT", Georgia, serif;
-  --font-heading: "Playfair Display", "Didot", "Bodoni MT", Georgia, serif;
+  /* Two faces. Luxurious Roman, a high-contrast roman, for the big headlines and the wordmark only:
+     its hairlines need size. Jost, a geometric sans, for everything else, headings in the room
+     included, and for codes, with tabular figures for clocks and sizes. Neither is ever faked
+     bold or italic (font-synthesis: none on html). */
+  --font-display: "Luxurious Roman", "Didot", "Bodoni MT", Georgia, serif;
   --font-text: "Jost", system-ui, -apple-system, "Segoe UI", sans-serif;
 
   --step-small: clamp(0.8125rem, 0.79rem + 0.1vw, 0.875rem);
@@ -99,6 +96,10 @@ html {
   scrollbar-color: var(--tan) transparent;
   accent-color: var(--ink);
   caret-color: var(--ink);
+  /* No grey or blue box flashing over whatever is tapped on a phone; buttons have their own
+     pressed state, and keyboard focus still gets its outline. */
+  -webkit-tap-highlight-color: transparent;
+  font-synthesis: none;
 }
 
 body {
@@ -116,10 +117,10 @@ h1,
 h2,
 h3 {
   margin: 0;
-  font-family: var(--font-heading);
-  font-weight: 500;
-  letter-spacing: 0;
-  line-height: 1.15;
+  font-family: var(--font-text);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
   text-wrap: balance;
 }
 
@@ -250,11 +251,11 @@ video {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  font-family: var(--font-brand);
-  font-weight: 500;
-  font-size: 1.125rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 1.625rem;
+  letter-spacing: 0;
+  line-height: 1;
   text-decoration: none;
 }
 
