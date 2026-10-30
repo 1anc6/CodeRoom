@@ -7,8 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
 from app.deps import CurrentParticipant, SessionDep
+from app.messages import current_members
 from app.models import Participant, Room, RoomStatus, utcnow
 from app.rate_limit import client_ip
+from app.realtime import CLOSE_LEFT, RoomHub, event
 from app.schemas import (
     CreateRoomRequest,
     JoinRoomRequest,
@@ -27,6 +29,10 @@ _MAX_CODE_ATTEMPTS = 20
 
 def _settings(request: Request) -> Settings:
     return request.app.state.settings
+
+
+def _hub(request: Request) -> RoomHub:
+    return request.app.state.hub
 
 
 def _code_key(settings: Settings) -> str:
@@ -154,25 +160,30 @@ async def join_room(body: JoinRoomRequest, request: Request, session: SessionDep
     room.last_activity_at = now
     session.add(participant)
     await session.commit()
-    return _session_out(room, participant, body.code, token)
+
+    result = _session_out(room, participant, body.code, token)
+    await _hub(request).broadcast(
+        room.id, event("participant.joined", participant=result.participant.model_dump(mode="json"))
+    )
+    return result
 
 
 @router.get("/{room_id}", response_model=RoomDetailsOut)
-async def get_room(me: CurrentParticipant, session: SessionDep) -> RoomDetailsOut:
-    participants = await session.scalars(
-        select(Participant)
-        .where(Participant.room_id == me.room_id, Participant.left_at.is_(None))
-        .order_by(Participant.joined_at)
-    )
+async def get_room(me: CurrentParticipant, request: Request, session: SessionDep) -> RoomDetailsOut:
     return RoomDetailsOut(
         room=RoomOut.model_validate(me.room),
         me=ParticipantOut.model_validate(me),
-        participants=[ParticipantOut.model_validate(p) for p in participants],
+        participants=await current_members(session, _hub(request), me.room_id),
     )
 
 
 @router.delete("/{room_id}/leave", status_code=status.HTTP_204_NO_CONTENT)
-async def leave_room(me: CurrentParticipant, session: SessionDep) -> Response:
+async def leave_room(me: CurrentParticipant, request: Request, session: SessionDep) -> Response:
     me.left_at = utcnow()
     await session.commit()
+
+    hub = _hub(request)
+    # The session token is now revoked, so close any sockets it opened (other tabs included).
+    await hub.close_participant(me.room_id, me.id, CLOSE_LEFT, "Left the room")
+    await hub.broadcast(me.room_id, event("participant.left", participant_id=str(me.id)))
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     room_create_limit: int = 10
     room_create_window_seconds: int = 600
 
+    max_message_length: int = 4000
+    message_rate_limit: int = 20
+    message_rate_window_seconds: int = 10
+    max_connections_per_participant: int = 5
+    ws_auth_timeout_seconds: float = 5
+
 
 @lru_cache
 def get_settings() -> Settings:

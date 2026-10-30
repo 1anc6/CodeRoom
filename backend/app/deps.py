@@ -13,8 +13,22 @@ from app.security import hash_session_token
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
-# Tokens travel in the Authorization header, never in URLs.
+# Tokens travel in the Authorization header (or the first WebSocket frame), never in URLs.
 _bearer = HTTPBearer(auto_error=False)
+
+
+async def find_participant(session: AsyncSession, room_id: uuid.UUID, token: str) -> Participant | None:
+    """The participant this token belongs to, if it is a current member of this room.
+    The room is loaded too; callers still need to check that it is open."""
+    return await session.scalar(
+        select(Participant)
+        .options(joinedload(Participant.room))
+        .where(
+            Participant.token_hash == hash_session_token(token),
+            Participant.room_id == room_id,
+            Participant.left_at.is_(None),
+        )
+    )
 
 
 async def get_current_participant(
@@ -31,15 +45,7 @@ async def get_current_participant(
     if credentials is None:
         raise unauthorized
 
-    participant = await session.scalar(
-        select(Participant)
-        .options(joinedload(Participant.room))
-        .where(
-            Participant.token_hash == hash_session_token(credentials.credentials),
-            Participant.room_id == room_id,
-            Participant.left_at.is_(None),
-        )
-    )
+    participant = await find_participant(session, room_id, credentials.credentials)
     if participant is None:
         raise unauthorized
 
