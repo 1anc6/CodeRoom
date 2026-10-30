@@ -11,8 +11,8 @@ The full product and architecture plan is in [CodeRoom_Project_Blueprint.pdf](Co
 | M1 Rooms and join | Create room, join by code, room-scoped sessions, expiry checks, rate limits | Done |
 | M2 Real-time chat | WebSockets, message history, presence, reconnect | Done |
 | M3 File sharing | Uploads/downloads through the API, quotas, type checks | Done (local disk storage) |
-| M4 Expiration | Cleanup worker that revokes access and deletes stored files | Next |
-| M5 Harden and deploy | Abuse controls, failure testing, Cloudflare R2 storage adapter, hosting | |
+| M4 Expiration | Cleanup worker that revokes access and deletes stored files | Done |
+| M5 Harden and deploy | Abuse controls, failure testing, Cloudflare R2 storage adapter, hosting | Next |
 | Frontend | React + Vite + TypeScript | Not started |
 
 ## Layout
@@ -28,6 +28,7 @@ backend/              FastAPI app
     messages.py       message queries shared by HTTP and WebSocket routes
     storage.py        file storage interface; local-disk implementation
     file_types.py     allowed upload types, detected from file contents
+    cleanup.py        expired-room cleanup worker (also runnable on its own)
     security.py       room codes and session tokens
     rate_limit.py     in-memory sliding-window limiter
   alembic/            database migrations
@@ -136,8 +137,8 @@ directly. Responses are always `attachment`, with `X-Content-Type-Options: nosni
 `Content-Security-Policy` and `Cache-Control: private, no-store`. A file is only reachable through
 its own room's URL and with a session for that room, so a file id alone grants nothing.
 
-Files from expired rooms stay on disk until the cleanup worker (M4) exists, but they can't be
-downloaded once the room has expired.
+Once a room expires its files can't be downloaded, and the cleanup worker deletes them within about
+a minute (see below).
 
 ### Message history
 
@@ -196,8 +197,67 @@ would need a shared pub/sub layer for broadcasts.
   `CODEROOM_CODE_HASH_KEY`. The server cannot show a room's code again, so the client keeps it.
 - A code is unique among active rooms. Once a room expires its code can be reused.
 - Each join issues a random session token, stored only as a SHA-256 hash and valid for one room.
-- Expiry is checked on every request, so expired rooms are closed even before the cleanup worker
-  (M4) exists.
+- Expiry is checked on every request, so a room closes the moment it expires, without waiting for
+  the cleanup worker.
 - Failed joins are limited to 5 per minute per IP, and room creation to 10 per 10 minutes per IP.
   Limits are held in memory, which suits a single app instance. Behind a proxy, run uvicorn with
   `--proxy-headers --forwarded-allow-ips=<proxy ip>` so limits apply to real client IPs.
+
+## Room expiry and cleanup
+
+A room's lifetime is fixed when it's created (2 hours by default, 8 at most); activity doesn't extend
+it. At the expiry time:
+
+1. **Access stops immediately.** Every request and WebSocket message checks expiry, and connected
+   clients get `room.expired` and are disconnected (close code `4410`).
+2. **The cleanup worker deletes the room's data** on its next run, within about a minute. It marks the
+   room `deleting`, deletes its stored files, deletes its messages, file records and participants,
+   then marks it `deleted`.
+3. **Failures are retried.** If storage deletion fails, the room stays `deleting` (still closed to
+   everyone) and the next run tries again. Every step is safe to repeat, and one failing room doesn't
+   hold up the others.
+
+Afterwards the old code can be used by a new room, and old session tokens get `410`.
+
+Once an hour the worker also **reconciles storage**. It deletes stored objects that no file record
+accounts for: leftovers of deleted rooms, and uploads interrupted before they were recorded. Unknown
+objects in open rooms are only removed once they're more than an hour old, so uploads in progress are
+never touched.
+
+### Running the worker
+
+By default the worker runs inside the API process, which is enough for a single instance. To run it
+separately instead (e.g. a cron job or scheduled task), set `CODEROOM_CLEANUP_IN_APP=false` and
+schedule one of these (from `backend/`):
+
+```bash
+.venv/Scripts/python -m app.cleanup --reconcile
+```
+
+```bash
+.venv/Scripts/python -m app.cleanup --loop
+```
+
+Several workers can safely run at once: each room is claimed with a row lock (`SKIP LOCKED`), so two
+workers never purge the same room.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `CODEROOM_CLEANUP_IN_APP` | `true` | Run the worker inside the API process |
+| `CODEROOM_CLEANUP_INTERVAL_SECONDS` | `60` | Time between cleanup runs |
+| `CODEROOM_CLEANUP_BATCH_SIZE` | `50` | Most rooms purged per run |
+| `CODEROOM_RECONCILE_INTERVAL_SECONDS` | `3600` | Time between storage reconciles |
+| `CODEROOM_ORPHAN_GRACE_SECONDS` | `3600` | Minimum age before an unrecorded object counts as stray |
+
+### Retention policy
+
+What CodeRoom keeps, and for how long. Check it against your hosting setup before a public launch,
+and publish it.
+
+| Data | Kept until |
+|---|---|
+| Messages, files, display names, session token hashes | The room expires, plus up to about a minute for cleanup (longer only if storage deletion keeps failing) |
+| Stored objects the database doesn't know about | Up to about two hours (reconcile interval plus grace period) |
+| Room record: id, keyed hash of the code, timestamps, status | Kept indefinitely as a tombstone. It holds no messages, files or names. |
+| Application logs | Your host's log retention. The app doesn't log message content, file contents, codes or tokens. |
+| Database and storage backups | Your providers' backup retention. Deleted data can survive in backups until they age out, so don't promise instant or forensic erasure. |
