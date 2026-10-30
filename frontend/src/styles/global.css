@@ -1,0 +1,280 @@
+/*
+  CodeRoom tokens. The palette is the brand's five colours; the few derived values are noted.
+  Off White F6F4F2 · Warm Grey D3C9BD · Muted Tan AB9E8E · Antique Brass B4986B · Dark Charcoal 423E3B
+*/
+:root {
+  --bg: #f6f4f2;
+  --card: #fcfbfa;          /* derived: one step lighter than the ground, for the product's panels */
+  --surface: #ede8e2;       /* derived: one step toward Warm Grey */
+  --surface-2: #e3dcd3;     /* derived: two steps */
+  --field: #d3c9bd;         /* Warm Grey */
+  --tan: #ab9e8e;           /* Muted Tan: dots, tracks, never body text */
+  --accent: #b4986b;        /* Antique Brass */
+  --ink: #423e3b;           /* Dark Charcoal */
+  --ink-strong: #2a2724;    /* derived: text set on brass */
+  --ink-soft: #6b6259;      /* derived: secondary text, 5.4:1 on the ground */
+  --on-ink: #f6f4f2;
+  --online: #6f8a62;
+  --danger: #9b3b2e;
+  --danger-bg: #f3e3df;
+
+  --font-display: "League Spartan", "Figtree", system-ui, sans-serif;
+  --font-text: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --step-small: clamp(0.8125rem, 0.79rem + 0.1vw, 0.875rem);
+  --step-body: clamp(1rem, 0.96rem + 0.2vw, 1.125rem);
+  --step-lead: clamp(1.25rem, 1.1rem + 0.7vw, 1.625rem);
+  --step-head: clamp(2.25rem, 1.4rem + 3.4vw, 4.25rem);
+  --step-display: clamp(3.25rem, 1.6rem + 6.4vw, 7.5rem);
+
+  --margin: clamp(16px, 3.2vw, 48px);
+  --radius: 20px;
+  --radius-sm: 12px;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur: 220ms;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-text);
+  font-size: var(--step-body);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 0.92;
+  text-wrap: balance;
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+img,
+video {
+  display: block;
+  max-width: 100%;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--ink-strong);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Buttons: one shape across the product, fully round. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 24px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--on-ink);
+  font-weight: 600;
+  font-size: var(--step-body);
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    transform 140ms var(--ease-out),
+    background-color var(--dur) var(--ease-out),
+    opacity var(--dur);
+}
+
+.btn:hover {
+  background: var(--ink-strong);
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn--quiet {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.btn--quiet:hover {
+  background: var(--surface-2);
+}
+
+.btn--small {
+  min-height: 38px;
+  padding: 0 16px;
+  font-size: var(--step-small);
+}
+
+.text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  text-decoration: none;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+.text-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.375rem;
+  letter-spacing: -0.03em;
+  text-decoration: none;
+  padding-top: 3px;
+}
+
+.wordmark svg {
+  margin-top: -3px;
+}
+
+/* People: a stable initial on a pale tint of their own. */
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  color: var(--ink);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.avatar--lg {
+  width: 40px;
+  height: 40px;
+  font-size: 0.875rem;
+}
+
+.dot {
+  display: inline-block;
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--field);
+}
+
+.dot--on {
+  background: var(--online);
+}
+
+/* Entrance used across the landing page: parts rise in sequence once their section is seen. */
+.rise {
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity 700ms var(--ease-out),
+    transform 700ms var(--ease-out);
+  transition-delay: calc(var(--i, 0) * 80ms);
+}
+
+.is-seen .rise,
+.rise.is-seen {
+  opacity: 1;
+  transform: none;
+}
+
+/* The first screen doesn't wait for an observer: it plays its entrance as soon as it paints. */
+.hero .rise {
+  opacity: 1;
+  transform: none;
+  transition: none;
+  animation: rise-in 800ms var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 90ms);
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .rise {
+    opacity: 1;
+    transform: none;
+  }
+}

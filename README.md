@@ -13,7 +13,7 @@ The full product and architecture plan is in [CodeRoom_Project_Blueprint.pdf](Co
 | M3 File sharing | Uploads/downloads through the API, quotas, type checks | Done (local disk storage) |
 | M4 Expiration | Cleanup worker that revokes access and deletes stored files | Done |
 | M5 Harden and deploy | Abuse controls, failure testing, Cloudflare R2 storage adapter, hosting | Next |
-| Frontend | React + Vite + TypeScript | Not started |
+| Frontend | React + Vite + TypeScript: landing page with create/join, room with chat, files and people | Done |
 
 ## Layout
 
@@ -33,6 +33,14 @@ backend/              FastAPI app
     rate_limit.py     in-memory sliding-window limiter
   alembic/            database migrations
   tests/
+frontend/             React + Vite + TypeScript client
+  src/
+    api/              typed HTTP client and server frame types
+    pages/            landing page and room page
+    components/       create/join panel, code input, how-it-works stages
+    room/             useRoom hook (socket, history, uploads) and room panels
+    styles/           tokens and global styles, landing, room
+  public/photos/      public-domain photographs used on the landing page
 docker-compose.yml    local PostgreSQL
 ```
 
@@ -75,6 +83,30 @@ Apply migrations and start the API:
 ```
 
 Interactive API docs are at http://localhost:8000/docs.
+
+### Frontend
+
+Requires Node 20.19+ or 22.12+. With the API running on port 8000, from `frontend/`:
+
+```bash
+npm install
+```
+
+```bash
+npm run dev
+```
+
+Open http://localhost:5173. The dev server proxies `/api` (including the WebSocket) to
+`http://localhost:8000`, so the API needs no CORS changes. Point it elsewhere with
+`CODEROOM_API_URL`. `npm run build` type-checks and writes a static build to `frontend/dist/`.
+
+Each browser tab holds its own room session (in `sessionStorage`), so two tabs can be two people in
+the same room. The last name you used is remembered in `localStorage`.
+
+The landing page photographs are public domain, via Wikimedia Commons: the Library of Congress
+reading room by Carol M. Highsmith, a mathematics lecture by Tungsten, a chalkboard by Francisco V.
+Govea II (U.S. Air Force) and students at Western High School by Frances Benjamin Johnston. Sources
+are in `frontend/public/photos/credits.json` and the page footer.
 
 ## Tests
 
