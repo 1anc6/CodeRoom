@@ -1,10 +1,11 @@
 import os
-from collections.abc import AsyncIterator, Callable
-from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from collections.abc import AsyncIterator, Callable, Iterator
+from contextlib import AbstractAsyncContextManager, AbstractContextManager, asynccontextmanager, contextmanager
 
 import httpx
 import pytest
 from fastapi import FastAPI
+from starlette.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
@@ -21,12 +22,16 @@ def auth(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-@asynccontextmanager
-async def _running_app(settings: Settings) -> AsyncIterator[FastAPI]:
-    app = create_app(settings)
+async def _reset_schema(app: FastAPI) -> None:
     async with app.state.engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
+
+
+@asynccontextmanager
+async def _running_app(settings: Settings) -> AsyncIterator[FastAPI]:
+    app = create_app(settings)
+    await _reset_schema(app)
     try:
         yield app
     finally:
@@ -74,3 +79,26 @@ def client_factory() -> ClientFactory:
             yield client
 
     return _factory
+
+
+# --- WebSocket tests ------------------------------------------------------------------
+# httpx can't open WebSockets, so these tests use Starlette's synchronous TestClient. It runs
+# the app on its own event loop (client.portal); database setup must run there too.
+
+
+@pytest.fixture
+def live_client_factory() -> Callable[[Settings], AbstractContextManager[TestClient]]:
+    @contextmanager
+    def _factory(settings: Settings) -> Iterator[TestClient]:
+        app = create_app(settings)
+        with TestClient(app) as client:
+            client.portal.call(_reset_schema, app)
+            yield client
+
+    return _factory
+
+
+@pytest.fixture
+def live_client(make_settings, live_client_factory) -> Iterator[TestClient]:
+    with live_client_factory(make_settings()) as client:
+        yield client

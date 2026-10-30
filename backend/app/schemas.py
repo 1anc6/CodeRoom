@@ -58,7 +58,27 @@ class RoomSessionOut(BaseModel):
     token: str
 
 
+class MemberOut(ParticipantOut):
+    """A current room member, with whether they have a live connection right now."""
+
+    online: bool
+
+
 class RoomDetailsOut(BaseModel):
     room: RoomOut
     me: ParticipantOut
-    participants: list[ParticipantOut]
+    participants: list[MemberOut]
+
+
+class MessageOut(BaseModel):
+    id: uuid.UUID
+    participant_id: uuid.UUID
+    display_name: str
+    content: str
+    created_at: datetime
+
+
+class MessagePageOut(BaseModel):
+    messages: list[MessageOut]
+    # Whether more messages exist beyond this page in the direction requested.
+    has_more: bool
