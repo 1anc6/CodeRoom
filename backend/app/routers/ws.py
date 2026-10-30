@@ -9,6 +9,7 @@ import json
 import uuid
 from typing import Any
 
+import anyio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import joinedload
 
@@ -32,6 +33,7 @@ from app.schemas import ParticipantOut
 router = APIRouter()
 
 _MAX_CLIENT_ID_LENGTH = 64
+_CLEANUP_TIMEOUT_SECONDS = 5
 
 
 class _Closed(Exception):
@@ -204,8 +206,11 @@ async def room_socket(websocket: WebSocket, room_id: uuid.UUID) -> None:
         # (for example the room expired or the participant left from another tab).
         pass
     finally:
-        # Returns False if the server already closed and unregistered this connection
-        # (leave or expiry), in which case the room has been told some other way.
-        if hub.disconnect(conn):
-            await hub.broadcast(room_id, presence(participant.id, online=False))
-        await _touch_last_seen(websocket, participant.id)
+        # Shielded so the room still hears about the disconnect when this task is being
+        # cancelled (e.g. server shutdown), and time-boxed so cleanup can't stall shutdown.
+        with anyio.move_on_after(_CLEANUP_TIMEOUT_SECONDS, shield=True):
+            # Returns False if the server already closed and unregistered this connection
+            # (leave or expiry), in which case the room has been told some other way.
+            if hub.disconnect(conn):
+                await hub.broadcast(room_id, presence(participant.id, online=False))
+            await _touch_last_seen(websocket, participant.id)

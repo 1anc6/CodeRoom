@@ -30,6 +30,13 @@ class Settings(BaseSettings):
     max_connections_per_participant: int = 5
     ws_auth_timeout_seconds: float = 5
 
+    # Uploaded files are kept here until the object-storage (R2) adapter is added.
+    storage_dir: str = "data/uploads"
+    max_file_size_bytes: int = 25 * 1024 * 1024
+    max_room_storage_bytes: int = 100 * 1024 * 1024
+    upload_rate_limit: int = 10
+    upload_rate_window_seconds: int = 60
+
 
 @lru_cache
 def get_settings() -> Settings:

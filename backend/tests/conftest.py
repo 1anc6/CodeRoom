@@ -50,6 +50,7 @@ def make_settings(tmp_path) -> Callable[..., Settings]:
         values = {
             "database_url": TEST_DATABASE_URL or f"sqlite+aiosqlite:///{tmp_path / 'test.db'}",
             "code_hash_key": "test-code-hash-key-0123456789abcdef",
+            "storage_dir": str(tmp_path / "uploads"),
             **overrides,
         }
         return Settings(_env_file=None, **values)

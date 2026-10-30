@@ -8,7 +8,8 @@ from app.config import Settings, get_settings
 from app.db import create_engine, create_sessionmaker
 from app.rate_limit import SlidingWindowLimiter
 from app.realtime import RoomHub
-from app.routers import messages, rooms, ws
+from app.routers import files, messages, rooms, ws
+from app.storage import LocalFileStorage
 
 _MIN_CODE_HASH_KEY_LENGTH = 32
 
@@ -40,6 +41,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.join_failures = SlidingWindowLimiter(settings.failed_join_limit, settings.failed_join_window_seconds)
     app.state.room_creations = SlidingWindowLimiter(settings.room_create_limit, settings.room_create_window_seconds)
     app.state.message_rate = SlidingWindowLimiter(settings.message_rate_limit, settings.message_rate_window_seconds)
+    app.state.uploads = SlidingWindowLimiter(settings.upload_rate_limit, settings.upload_rate_window_seconds)
+    app.state.storage = LocalFileStorage(settings.storage_dir)
 
     app.add_middleware(
         CORSMiddleware,
@@ -49,6 +52,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.include_router(rooms.router)
     app.include_router(messages.router)
+    app.include_router(files.router)
     app.include_router(ws.router)
 
     @app.get("/api/health", tags=["health"])

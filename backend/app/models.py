@@ -2,7 +2,7 @@ import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, MetaData, String, Text, text
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, MetaData, String, Text, text
 from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
@@ -115,3 +115,22 @@ class Message(Base):
     participant: Mapped[Participant] = relationship()
 
     __table_args__ = (Index("ix_messages_room_id_created_at", "room_id", "created_at"),)
+
+
+class RoomFile(Base):
+    """Metadata for an uploaded file. The bytes live in file storage under object_key,
+    which the server generates and never exposes to clients."""
+
+    __tablename__ = "files"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    room_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("rooms.id", ondelete="CASCADE"), index=True)
+    participant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("participants.id", ondelete="CASCADE"))
+    object_key: Mapped[str] = mapped_column(String(255), unique=True)
+    original_name: Mapped[str] = mapped_column(String(255))
+    mime_type: Mapped[str] = mapped_column(String(127))
+    size_bytes: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+
+    participant: Mapped[Participant] = relationship()

@@ -242,6 +242,21 @@ def test_join_is_announced_to_connected_members(live_client):
     assert "token" not in announced["participant"]
 
 
+def test_uploaded_file_is_announced_to_the_room(live_client):
+    alice, bob = pair(live_client)
+    with connect(live_client, alice) as (ws, _):
+        response = live_client.post(
+            f"/api/rooms/{bob['room']['id']}/files",
+            params={"name": "notes.pdf"},
+            content=b"%PDF-1.7\n" + b"0" * 100,
+            headers=auth(bob["token"]),
+        )
+        assert response.status_code == 201
+        announced = ws.receive_json()
+    assert announced == {"type": "file.ready", "file": response.json()}
+    assert announced["file"]["display_name"] == "Bob"
+
+
 def test_disconnect_marks_participant_offline(live_client):
     alice, bob = pair(live_client)
     with connect(live_client, alice) as (alice_ws, _):

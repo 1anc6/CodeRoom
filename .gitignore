@@ -8,6 +8,7 @@ __pycache__/
 # Local config and data
 .env
 *.db
+data/
 
 # Node
 node_modules/
