@@ -1,0 +1,21 @@
+# Local development services. The API itself runs on the host (see README).
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: coderoom
+      POSTGRES_PASSWORD: coderoom  # local development only
+      POSTGRES_DB: coderoom
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U coderoom -d coderoom"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
