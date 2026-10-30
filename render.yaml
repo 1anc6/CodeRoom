@@ -4,6 +4,8 @@ services:
     name: coderoom-api
     runtime: docker
     rootDir: backend
+    # Deploy from main, the same branch Vercel ships to production, so the site and API move together.
+    branch: main
     plan: free
     healthCheckPath: /api/health
     # The realtime hub and rate limits live in memory, so this must stay a single instance.
