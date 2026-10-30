@@ -12,7 +12,7 @@
   --accent: #b4986b;        /* Antique Brass */
   --ink: #423e3b;           /* Dark Charcoal */
   --ink-strong: #2a2724;    /* derived: text set on brass */
-  --ink-soft: #6b6259;      /* derived: secondary text, 5.4:1 on the ground */
+  --ink-soft: #635a51;      /* derived: secondary text and placeholders, 6.1:1 on the ground, 5:1 on surface-2 */
   --on-ink: #f6f4f2;
   --online: #6f8a62;
   --danger: #9b3b2e;
@@ -43,6 +43,10 @@
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  /* Browser surfaces take the palette too: scrollbars, checkboxes and the text caret. */
+  scrollbar-color: var(--tan) transparent;
+  accent-color: var(--ink);
+  caret-color: var(--ink);
 }
 
 body {
@@ -71,8 +75,16 @@ p {
   margin: 0;
 }
 
+p,
+figcaption,
+dd {
+  text-wrap: pretty;
+}
+
 a {
   color: inherit;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
 }
 
 button,
@@ -231,27 +243,9 @@ video {
   background: var(--online);
 }
 
-/* Entrance used across the landing page: parts rise in sequence once their section is seen. */
+/* The page's one entrance: the first screen rises in sequence as it paints. Everything below is
+   simply there when you scroll to it. */
 .rise {
-  opacity: 0;
-  transform: translateY(24px);
-  transition:
-    opacity 700ms var(--ease-out),
-    transform 700ms var(--ease-out);
-  transition-delay: calc(var(--i, 0) * 80ms);
-}
-
-.is-seen .rise,
-.rise.is-seen {
-  opacity: 1;
-  transform: none;
-}
-
-/* The first screen doesn't wait for an observer: it plays its entrance as soon as it paints. */
-.hero .rise {
-  opacity: 1;
-  transform: none;
-  transition: none;
   animation: rise-in 800ms var(--ease-out) both;
   animation-delay: calc(var(--i, 0) * 90ms);
 }
@@ -263,18 +257,15 @@ video {
   }
 }
 
+/* Reduced motion keeps the fades that show something changed and drops the travel. */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 1ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 1ms !important;
-    scroll-behavior: auto !important;
+  html {
+    scroll-behavior: auto;
   }
 
-  .rise {
-    opacity: 1;
-    transform: none;
+  @keyframes rise-in {
+    from {
+      opacity: 0;
+    }
   }
 }

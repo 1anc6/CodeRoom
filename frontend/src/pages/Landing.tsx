@@ -5,7 +5,7 @@ import { DoorPanel, type DoorMode } from "../components/DoorPanel";
 import { ArrowRight } from "../components/Icons";
 import { Stages } from "../components/Stages";
 import { parseServerTime } from "../lib/format";
-import { stagger, useReveal } from "../lib/useReveal";
+import { stagger } from "../lib/stagger";
 import { loadSession } from "../session";
 
 interface LandingState {
@@ -51,8 +51,8 @@ const KEPT: Array<[string, string]> = [
   ["Messages, files and names", "Until the room closes, plus about a minute while they're deleted."],
   ["The room code", "Never stored as written. The server keeps a keyed hash it can't turn back into digits."],
   ["Your place in the room", "A random token held by this browser tab. The server keeps only a hash of it."],
-  ["The room's record", "Its id, times and status, kept as a tombstone with no messages, files or names."],
-  ["Logs and backups", "Your host's own retention. Logs never contain messages, files, codes or tokens."],
+  ["The room's record", "Its id, times and status, kept as a tombstone with no messages, files or names."],
+  ["Logs and backups", "Your host's own retention. Logs never contain messages, files, codes or tokens."],
 ];
 
 export function Landing() {
@@ -61,7 +61,6 @@ export function Landing() {
   const [mode, setMode] = useState<DoorMode>(incoming.mode ?? "create");
   const [focusRequest, setFocusRequest] = useState(0);
   const [closingMode, setClosingMode] = useState<DoorMode>("create");
-  useReveal();
 
   // A room this tab is already in, if it hasn't closed.
   const current = useMemo(() => {
@@ -73,7 +72,8 @@ export function Landing() {
   function openJoin() {
     setMode("join");
     setFocusRequest((n) => n + 1);
-    document.getElementById("door")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    document.getElementById("door")?.scrollIntoView({ behavior: still ? "auto" : "smooth", block: "center" });
   }
 
   const year = new Date().getFullYear();
@@ -96,7 +96,7 @@ export function Landing() {
       </header>
 
       <main>
-        <section className="hero" data-reveal aria-labelledby="hero-title">
+        <section className="hero" aria-labelledby="hero-title">
           <div className="hero__copy">
             <h1 id="hero-title" className="hero__title rise">
               Five digits.
@@ -126,19 +126,19 @@ export function Landing() {
 
         <Stages />
 
-        <section className="places" id="places" data-reveal aria-labelledby="places-title">
+        <section className="places" id="places" aria-labelledby="places-title">
           <div className="places__intro">
-            <h2 id="places-title" className="rise">
+            <h2 id="places-title">
               Said across
               <br />
               the table.
             </h2>
-            <p className="rise" style={stagger(1)}>
+            <p>
               A long library table, the back row of a lecture, a board nobody has wiped yet. When the people you need are
               right there, five digits said out loud beats swapping numbers, emails or links.
             </p>
           </div>
-          <figure className="places__main rise" style={stagger(1)}>
+          <figure className="places__main">
             <div className="places__frame">
               <img
                 src="/photos/reading-room.jpg"
@@ -150,8 +150,8 @@ export function Landing() {
             <figcaption>A reading room, where the person at the next desk is one code away.</figcaption>
           </figure>
           <div className="places__row">
-            {PLACES.map((place, i) => (
-              <figure className="rise" key={place.src} style={stagger(i)}>
+            {PLACES.map((place) => (
+              <figure key={place.src}>
                 <div className="places__frame">
                   <img src={place.src} width={place.width} height={place.height} alt={place.alt} loading="lazy" />
                 </div>
@@ -161,11 +161,11 @@ export function Landing() {
           </div>
         </section>
 
-        <section className="limits" id="limits" data-reveal aria-labelledby="limits-title">
-          <h2 id="limits-title" className="limits__title rise">
+        <section className="limits" id="limits" aria-labelledby="limits-title">
+          <h2 id="limits-title" className="limits__title">
             What a room holds
           </h2>
-          <div className="limits__table rise" role="table" aria-labelledby="limits-title" style={stagger(1)}>
+          <div className="limits__table" role="table" aria-labelledby="limits-title">
             <div className="limits__row limits__row--head" role="row">
               <span role="columnheader">
                 <span className="visually-hidden">Topic</span>
@@ -191,25 +191,25 @@ export function Landing() {
           </div>
         </section>
 
-        <section className="kept" id="kept" data-reveal aria-labelledby="kept-title">
+        <section className="kept" id="kept" aria-labelledby="kept-title">
           <div className="kept__intro">
-            <h2 id="kept-title" className="rise">
+            <h2 id="kept-title">
               What's kept,
               <br />
               and for how long
             </h2>
-            <p className="rise" style={stagger(1)}>
+            <p>
               CodeRoom is for passing things along, not for storing them. When a room closes, nobody can get back in and
               its contents are deleted.
             </p>
-            <p className="kept__warning rise" style={stagger(2)}>
+            <p className="kept__warning">
               A code is a door, not a lock: anyone who has it can walk in, and the server handles what you share (it isn't
               end-to-end encrypted). Share only what you'd hand to everyone who might hear the digits.
             </p>
           </div>
           <dl className="kept__list">
-            {KEPT.map(([what, until], i) => (
-              <div className="kept__item rise" key={what} style={stagger(i + 1)}>
+            {KEPT.map(([what, until]) => (
+              <div className="kept__item" key={what}>
                 <dt>{what}</dt>
                 <dd>{until}</dd>
               </div>
@@ -217,18 +217,18 @@ export function Landing() {
           </dl>
         </section>
 
-        <section className="closing" id="open" data-reveal aria-labelledby="closing-title">
+        <section className="closing" id="open" aria-labelledby="closing-title">
           <div className="closing__copy">
-            <h2 id="closing-title" className="rise">
+            <h2 id="closing-title">
               Open one
               <br />
               right now.
             </h2>
-            <p className="rise" style={stagger(1)}>
+            <p>
               Pick a name and how long it lasts. The code appears the moment the room opens, ready to read out.
             </p>
           </div>
-          <div className="closing__door rise" style={stagger(2)}>
+          <div className="closing__door">
             <DoorPanel mode={closingMode} onModeChange={setClosingMode} />
           </div>
         </section>

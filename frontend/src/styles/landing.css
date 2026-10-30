@@ -1,5 +1,10 @@
 /* Landing page. One frame: equal outer margins, a 12-column grid, sections 120–220px apart. */
 
+#root:has(> .landing) {
+  /* The full-bleed fields paint past the window's edges; they must never scroll sideways. */
+  overflow-x: clip;
+}
+
 .landing {
   padding-inline: var(--margin);
   max-width: 1600px;
@@ -147,7 +152,7 @@
 }
 
 .door__input::placeholder {
-  color: var(--tan);
+  color: var(--ink-soft);
 }
 
 .door__input:focus {
@@ -328,15 +333,13 @@
   grid-template-rows: 1fr auto;
   min-height: min(80svh, 720px);
   margin-top: clamp(48px, 5vw, 80px);
-  border-radius: 32px;
-  overflow: hidden;
-  background: var(--surface);
+  --band: var(--surface);
 }
 
 .stages__words {
   grid-column: 1;
   grid-row: 1;
-  padding: clamp(28px, 4vw, 56px);
+  padding: clamp(40px, 5vw, 72px) clamp(24px, 4vw, 56px) 40px 0;
 }
 
 .stages__copy {
@@ -364,7 +367,7 @@
   display: grid;
   place-items: center;
   padding: 48px 40px 140px;
-  background: var(--field);
+  --band: var(--field);
 }
 
 .stages__frag {
@@ -378,7 +381,7 @@
   grid-column: 1 / -1;
   grid-row: 2;
   z-index: 1;
-  padding: 0 clamp(28px, 4vw, 56px) 32px;
+  padding: 0 0 40px;
 }
 
 /* The track is two flat fills drawn behind a transparent range input: tan for the whole
@@ -491,6 +494,27 @@
   from {
     opacity: 0;
     transform: translateY(18px) scale(0.985);
+  }
+}
+
+/* Reduced motion: the same changes still show, as fades without travel. */
+@media (prefers-reduced-motion: reduce) {
+  @keyframes clause-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes frag-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes digit-in {
+    from {
+      opacity: 0.4;
+    }
   }
 }
 
@@ -799,16 +823,6 @@
   font-size: var(--step-small);
 }
 
-.places.is-seen .places__main img {
-  animation: drift 16s var(--ease-out) both;
-}
-
-@keyframes drift {
-  from {
-    transform: scale(1.08);
-  }
-}
-
 /* ---------- Limits: a comparison set as text ---------- */
 
 .limits {
@@ -937,10 +951,33 @@
   align-items: center;
   min-height: min(76svh, 700px);
   margin-top: clamp(120px, 14vw, 220px);
-  padding: clamp(28px, 4vw, 56px);
-  border-radius: 32px;
-  background: var(--accent);
+  padding-block: clamp(56px, 7vw, 112px);
+  --band: var(--accent);
   color: var(--ink-strong);
+}
+
+/* Full-bleed fields: the colour (--band) is painted by a layer that runs to the window's edges,
+   while the content keeps the page margins. The interface half of the stages runs off the right
+   edge only. */
+.stages,
+.stages__stage,
+.closing {
+  position: relative;
+  isolation: isolate;
+}
+
+.stages::before,
+.stages__stage::before,
+.closing::before {
+  content: "";
+  position: absolute;
+  inset: 0 -100vmax;
+  z-index: -1;
+  background: var(--band);
+}
+
+.stages__stage::before {
+  left: 0;
 }
 
 .closing__copy {
@@ -966,6 +1003,98 @@
 
 .closing .door {
   box-shadow: 0 30px 60px -30px rgba(42, 39, 36, 0.55); /* taste-skill-ignore: data-ui panel */
+}
+
+/* ---------- Scroll entrances: each section arrives its own way ----------
+   Driven by scroll position in CSS and made of movement only, never opacity, so content is
+   readable at every scroll position and a browser without scroll timelines shows it as it is. Photographs open, limit rows draw in, the kept list
+   settles, the closing line rises. */
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .places__frame {
+      animation: frame-open linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 100%;
+    }
+
+    .places__frame img {
+      animation: frame-settle linear both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 50%;
+    }
+
+    .limits__row > span:not(.limits__featured) {
+      animation: row-draw linear both;
+      animation-timeline: view();
+      animation-range: entry 20% entry 100%;
+    }
+
+    .kept__item {
+      animation: item-settle linear both;
+      animation-timeline: view();
+      animation-range: entry 10% entry 90%;
+    }
+
+    .closing__copy h2 {
+      animation: line-rise linear both;
+      animation-timeline: view();
+      animation-range: entry 20% cover 45%;
+    }
+  }
+
+  /* On a phone each limit is its own card, so the whole card settles instead of its text sliding. */
+  @media (prefers-reduced-motion: no-preference) and (max-width: 760px) {
+    .limits__row > span:not(.limits__featured) {
+      animation: none;
+    }
+
+    .limits__row {
+      transform-origin: 50% 0;
+      animation: card-settle linear both;
+      animation-timeline: view();
+      animation-range: entry 10% entry 90%;
+    }
+  }
+}
+
+@keyframes card-settle {
+  from {
+    transform: scale(0.92);
+  }
+}
+
+@keyframes frame-open {
+  from {
+    clip-path: inset(24% 0 0 0 round var(--radius));
+  }
+  to {
+    clip-path: inset(0 round var(--radius));
+  }
+}
+
+@keyframes frame-settle {
+  from {
+    transform: scale(1.12);
+  }
+}
+
+@keyframes row-draw {
+  from {
+    transform: translateX(-32px);
+  }
+}
+
+@keyframes item-settle {
+  from {
+    transform: translateY(48px);
+  }
+}
+
+@keyframes line-rise {
+  from {
+    transform: translateY(0.3em);
+  }
 }
 
 /* ---------- Footer: one quiet line ---------- */
@@ -1006,7 +1135,7 @@
 
 .footer__credits {
   grid-column: 1 / -1;
-  max-width: 110ch;
+  max-width: 58ch; /* about 80 characters of Figtree */
   color: var(--ink-soft);
   font-size: var(--step-small);
 }
@@ -1090,14 +1219,17 @@
   .hero .door {
     padding: 0;
     background: transparent;
-    box-shadow: none;
+    box-shadow: none; /* taste-skill-ignore: removes the desktop shadow */
   }
 
-  /* The closing form runs to its brass field's edges, so its text keeps the field's margin. */
+  /* The page itself rises into the foot of the brass field, carrying the closing form, so the
+     form sits on the page just as it does in the hero. */
   .closing .door {
-    margin: 0 -16px -16px;
-    padding: 24px 16px;
-    border-radius: 24px 24px 28px 28px;
+    margin-inline: calc(-1 * var(--margin));
+    padding: 24px var(--margin) 32px;
+    border-radius: 24px 24px 0 0;
+    background: var(--bg);
+    box-shadow: none; /* taste-skill-ignore: removes the desktop shadow */
   }
 
   .places {
@@ -1123,13 +1255,17 @@
     grid-column: 1;
     grid-row: 1;
     min-height: 46svh;
-    padding: 28px 16px;
+    padding: 28px 0;
+  }
+
+  .stages__stage::before {
+    left: -100vmax;
   }
 
   .stages__control {
     grid-column: 1;
     grid-row: 2;
-    padding: 24px 20px 0;
+    padding: 28px 0 0;
   }
 
   .stages__slider {
@@ -1139,7 +1275,7 @@
   .stages__words {
     grid-column: 1;
     grid-row: 3;
-    padding: 24px 20px 36px;
+    padding: 24px 0 40px;
   }
 
   .stages__clause {
@@ -1197,8 +1333,7 @@
 
   .closing {
     min-height: 84svh;
-    padding: 28px 16px 16px;
-    border-radius: 28px;
+    padding: 48px 0 0;
   }
 
   .closing__copy h2 {

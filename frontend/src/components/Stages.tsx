@@ -1,6 +1,5 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import { formatRemaining } from "../lib/format";
-import { stagger } from "../lib/useReveal";
 import { Check, Copy, Download } from "./Icons";
 
 const STAGES = [
@@ -130,7 +129,7 @@ export function Stages() {
   const current = STAGES[stage];
 
   return (
-    <section className="stages" id="stages" data-reveal aria-labelledby="stages-title">
+    <section className="stages" id="stages" aria-labelledby="stages-title">
       <h2 className="visually-hidden" id="stages-title">
         How a room goes
       </h2>
@@ -149,7 +148,7 @@ export function Stages() {
           <Fragment stage={stage} closesAt={closesAt} />
         </div>
       </div>
-      <div className="stages__control rise" style={stagger(1)}>
+      <div className="stages__control">
         <label htmlFor="stage-range" className="visually-hidden">
           Stage of a room's life
         </label>

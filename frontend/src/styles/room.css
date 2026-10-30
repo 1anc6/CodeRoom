@@ -939,6 +939,27 @@ button.file__name:hover {
   }
 }
 
+/* Reduced motion: arrivals still fade in, they just don't travel. */
+@media (prefers-reduced-motion: reduce) {
+  @keyframes msg-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes preview-in {
+    from {
+      opacity: 0;
+    }
+  }
+}
+
 .preview__inner {
   display: flex;
   flex-direction: column;
