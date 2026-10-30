@@ -197,7 +197,7 @@ The server replies with `ready`, then streams events.
 | Direction | Type | Fields |
 |---|---|---|
 | client → server | `auth` | `token` |
-| client → server | `message.send` | `content` (1–4000 chars), optional `client_id` (≤ 64 chars) |
+| client → server | `message.send` | `content` (1–4000 chars), optional `client_id` (≤ 64 chars), optional `reply_to` (`{"kind": "message" \| "file", "id": ...}` in the same room) |
 | client → server | `ping` | |
 | server → client | `ready` | `me`, `participants` (each with `online`) |
 | server → client | `message.new` | `message`, `client_id` (echoes the sender's, so it can match its pending message) |
@@ -209,8 +209,12 @@ The server replies with `ready`, then streams events.
 | server → client | `error` | `code`, `detail`, `client_id`. The connection stays open. |
 | server → client | `pong` | |
 
-Error codes: `invalid_message`, `message_too_long`, `rate_limited` (20 messages per 10 seconds),
-`invalid_json`, `unsupported_frame`, `frame_too_large`, `unknown_type`.
+Error codes: `invalid_message`, `invalid_reply`, `message_too_long`, `rate_limited` (20 messages per
+10 seconds), `invalid_json`, `unsupported_frame`, `frame_too_large`, `unknown_type`.
+
+A message that replies to something carries `reply_to`: `kind`, `id`, `participant_id`,
+`display_name`, `text` (the first 200 characters of the quoted message, or the file's name) and
+`mime_type` (files only). It is `null` for ordinary messages.
 
 Close codes: `1000` left the room, `1011` server couldn't deliver to this client, `4400` bad first
 frame, `4401` invalid session, `4408` no auth frame in time, `4410` room expired, `4429` too many open

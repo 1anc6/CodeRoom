@@ -221,6 +221,86 @@ def test_message_rate_is_limited_per_participant(make_settings, live_client_fact
         assert (error["code"], error["client_id"]) == ("rate_limited", "tmp-3")
 
 
+def test_reply_quotes_the_original_message_live_and_in_history(live_client):
+    alice, bob = pair(live_client)
+    with connect(live_client, alice) as (alice_ws, _), connect(live_client, bob) as (bob_ws, _):
+        alice_ws.receive_json()  # Bob comes online
+        send(alice_ws, "Lunch at noon?")
+        original = alice_ws.receive_json()["message"]
+        bob_ws.receive_json()
+
+        bob_ws.send_json(
+            {"type": "message.send", "content": "Works for me", "reply_to": {"kind": "message", "id": original["id"]}}
+        )
+        reply = bob_ws.receive_json()["message"]
+
+    assert reply["reply_to"] == {
+        "kind": "message",
+        "id": original["id"],
+        "participant_id": alice["participant"]["id"],
+        "display_name": "Alice",
+        "text": "Lunch at noon?",
+        "mime_type": None,
+    }
+    history = live_client.get(f"/api/rooms/{alice['room']['id']}/messages", headers=auth(alice["token"])).json()
+    assert [m["reply_to"] for m in history["messages"]] == [None, reply["reply_to"]]
+
+
+def test_reply_can_quote_a_shared_file(live_client):
+    alice, bob = pair(live_client)
+    uploaded = live_client.post(
+        f"/api/rooms/{bob['room']['id']}/files",
+        params={"name": "notes.pdf"},
+        content=b"%PDF-1.7\n" + b"0" * 100,
+        headers=auth(bob["token"]),
+    ).json()
+    with connect(live_client, alice) as (ws, _):
+        ws.send_json({"type": "message.send", "content": "Got it", "reply_to": {"kind": "file", "id": uploaded["id"]}})
+        quote = ws.receive_json()["message"]["reply_to"]
+    assert (quote["kind"], quote["id"], quote["display_name"]) == ("file", uploaded["id"], "Bob")
+    assert (quote["text"], quote["mime_type"]) == ("notes.pdf", "application/pdf")
+
+
+def test_long_messages_are_quoted_in_part(live_client):
+    alice = create(live_client)
+    with connect(live_client, alice) as (ws, _):
+        send(ws, "word " * 200)
+        original = ws.receive_json()["message"]
+        ws.send_json({"type": "message.send", "content": "tl;dr?", "reply_to": {"kind": "message", "id": original["id"]}})
+        quote = ws.receive_json()["message"]["reply_to"]
+    assert len(quote["text"]) == 200
+
+
+@pytest.mark.parametrize(
+    "reply_to",
+    [
+        "not-an-object",
+        {"kind": "message"},
+        {"kind": "message", "id": "not-a-uuid"},
+        {"kind": "sticker", "id": str(uuid.uuid4())},
+        {"kind": "message", "id": str(uuid.uuid4())},
+        {"kind": "file", "id": str(uuid.uuid4())},
+    ],
+)
+def test_invalid_replies_are_rejected(live_client, reply_to):
+    alice = create(live_client)
+    with connect(live_client, alice) as (ws, _):
+        ws.send_json({"type": "message.send", "content": "hi", "client_id": "tmp-r", "reply_to": reply_to})
+        error = ws.receive_json()
+    assert (error["code"], error["client_id"]) == ("invalid_reply", "tmp-r")
+
+
+def test_cannot_reply_to_a_message_from_another_room(live_client):
+    alice = create(live_client)
+    carol = create(live_client, name="Carol")
+    with connect(live_client, carol) as (ws, _):
+        send(ws, "Carol's secret")
+        secret = ws.receive_json()["message"]
+    with connect(live_client, alice) as (ws, _):
+        ws.send_json({"type": "message.send", "content": "hm", "reply_to": {"kind": "message", "id": secret["id"]}})
+        assert ws.receive_json()["code"] == "invalid_reply"
+
+
 def test_ping_gets_pong(live_client):
     alice = create(live_client)
     with connect(live_client, alice) as (ws, _):

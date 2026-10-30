@@ -111,8 +111,13 @@ class Message(Base):
     content: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
     deleted_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    # A reply quotes one earlier message or shared file in the same room (at most one of these).
+    reply_to_message_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("messages.id", ondelete="SET NULL"))
+    reply_to_file_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("files.id", ondelete="SET NULL"))
 
     participant: Mapped[Participant] = relationship()
+    reply_to_message: Mapped["Message | None"] = relationship(remote_side="Message.id")
+    reply_to_file: Mapped["RoomFile | None"] = relationship()
 
     __table_args__ = (Index("ix_messages_room_id_created_at", "room_id", "created_at"),)
 

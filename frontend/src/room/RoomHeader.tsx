@@ -20,6 +20,10 @@ interface RoomHeaderProps {
   onLeave: () => Promise<void>;
 }
 
+/**
+ * One bar: the room's code as the page title, its connection and closing time, and the way out.
+ * The time left runs along its bottom edge.
+ */
 export function RoomHeader({ session, connection, onLeave }: RoomHeaderProps) {
   const now = useNow(1000);
   const created = parseServerTime(session.room.created_at);
@@ -45,44 +49,31 @@ export function RoomHeader({ session, connection, onLeave }: RoomHeaderProps) {
   }
 
   return (
-    <header className={`room-header${confirming ? " is-confirming" : ""}`}>
+    <header className={`room-header${confirming ? " is-confirming" : ""}${closingSoon ? " is-soon" : ""}`}>
       <div className="room-header__brand">
         <Wordmark />
       </div>
 
-      <div className="room-header__code">
-        <span className="room-header__label">Room code</span>
-        <span className="room-header__digits tabular" aria-label={`Room code ${session.code.split("").join(" ")}`}>
-          {session.code}
-        </span>
-        <CopyCode code={session.code} />
+      <div className="room-header__title">
+        <h1 className="room-header__code tabular">
+          <span className="room-header__label">Room</span> {session.code}
+        </h1>
+        <CopyCode code={session.code} className="room-header__copy" />
       </div>
 
-      <div className={`room-header__time${closingSoon ? " is-soon" : ""}`}>
-        <div className="room-header__time-text">
-          <span className="tabular">
-            {closingSoon ? "Closing in " : "Closes in "}
-            {formatRemaining(remaining)}
-          </span>
-          <span className="room-header__at">at {formatClock(session.room.expires_at)}</span>
-        </div>
-        <div
-          className="room-header__bar"
-          role="progressbar"
-          aria-label="Time left in this room"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.round(fraction * 100)}
-        >
-          <span style={{ transform: `scaleX(${fraction})` }} />
-        </div>
-      </div>
-
-      <div className="room-header__end">
+      <p className="room-header__status">
         <span className={`conn conn--${connection}`} role="status">
           <span className="conn__dot" aria-hidden="true" />
           {CONNECTION_TEXT[connection]}
         </span>
+        <span className="room-header__left tabular">
+          {closingSoon ? "Closing in " : "Closes in "}
+          {formatRemaining(remaining)}
+        </span>
+        <span className="room-header__at tabular">at {formatClock(session.room.expires_at)}</span>
+      </p>
+
+      <div className="room-header__end">
         {confirming ? (
           <span className="leave-confirm">
             <button type="button" className="btn btn--small" onClick={leave} disabled={leaving}>
@@ -98,6 +89,17 @@ export function RoomHeader({ session, connection, onLeave }: RoomHeaderProps) {
             Leave
           </button>
         )}
+      </div>
+
+      <div
+        className="room-header__bar"
+        role="progressbar"
+        aria-label="Time left in this room"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(fraction * 100)}
+      >
+        <span style={{ transform: `scaleX(${fraction})` }} />
       </div>
     </header>
   );

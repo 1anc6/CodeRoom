@@ -16,6 +16,16 @@ export function formatClock(value: string): string {
   return clock.format(parseServerTime(value));
 }
 
+/** "0:12", "3:05", "1:02:09": a clip's length. */
+export function formatDuration(seconds: number): string {
+  const total = Math.max(0, Math.round(seconds));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const secs = String(total % 60).padStart(2, "0");
+  if (hours > 0) return `${hours}:${String(minutes).padStart(2, "0")}:${secs}`;
+  return `${minutes}:${secs}`;
+}
+
 /** "1 h 42 m", "8 m", "40 s": time left until the room closes. */
 export function formatRemaining(ms: number): string {
   if (ms <= 0) return "0 m";

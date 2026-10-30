@@ -97,9 +97,10 @@ async def create_room(body: CreateRoomRequest, request: Request, session: Sessio
         )
     limiter.hit(ip)
 
-    for _ in range(_MAX_CODE_ATTEMPTS):
+    # A chosen code gets one try: if it's taken, the host picks another rather than getting a different one.
+    for _ in range(1 if body.code else _MAX_CODE_ATTEMPTS):
         now = utcnow()
-        code = generate_room_code()
+        code = body.code or generate_room_code()
         code_hash = hash_room_code(code, _code_key(settings))
         if not await _code_is_free(session, code_hash, now):
             continue
@@ -121,6 +122,8 @@ async def create_room(body: CreateRoomRequest, request: Request, session: Sessio
             continue
         return _session_out(room, participant, code, token)
 
+    if body.code:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="That code is already in use. Choose another.")
     raise HTTPException(
         status.HTTP_503_SERVICE_UNAVAILABLE, detail="No room codes are available right now. Try again shortly."
     )

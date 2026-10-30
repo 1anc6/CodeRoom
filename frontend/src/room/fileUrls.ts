@@ -46,10 +46,15 @@ export function isPreviewable(file: FileOut): "image" | "video" | null {
   return null;
 }
 
-/** A blob URL for an image thumbnail, fetched only once the element is near the viewport. */
-export function useThumbnail(roomId: string, token: string, file: FileOut, element: HTMLElement | null): string | null {
+/** A blob URL for an image or video, fetched only once the element is near the viewport. */
+export function useLazyFileUrl(
+  roomId: string,
+  token: string,
+  file: FileOut,
+  element: HTMLElement | null,
+  wanted: boolean,
+): string | null {
   const [url, setUrl] = useState<string | null>(null);
-  const wanted = isPreviewable(file) === "image";
 
   useEffect(() => {
     if (!wanted || !element) return;
@@ -82,6 +87,11 @@ export function useThumbnail(roomId: string, token: string, file: FileOut, eleme
   }, [roomId, token, file.id, wanted, element]);
 
   return url;
+}
+
+/** A blob URL for an image thumbnail in a file list. Videos stay as type labels there. */
+export function useThumbnail(roomId: string, token: string, file: FileOut, element: HTMLElement | null): string | null {
+  return useLazyFileUrl(roomId, token, file, element, isPreviewable(file) === "image");
 }
 
 /** A short type label from the file's own extension, falling back to its detected type. */

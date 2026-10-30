@@ -11,12 +11,13 @@ from typing import Any
 
 import anyio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
 from app.config import Settings
 from app.deps import find_participant, room_is_closed
 from app.messages import current_members, message_out
-from app.models import Message, Participant, utcnow
+from app.models import Message, Participant, RoomFile, utcnow
 from app.realtime import (
     CLOSE_AUTH_TIMEOUT,
     CLOSE_BAD_REQUEST,
@@ -114,6 +115,18 @@ async def _handle_message_send(websocket: WebSocket, conn: Connection, frame: di
         await _send_error(websocket, "invalid_message", "Message contains a null character", client_id)
         return
 
+    # Optional {"kind": "message" | "file", "id": "<uuid>"}: the message or file this one replies to.
+    reply_to = frame.get("reply_to")
+    reply_target: tuple[str, uuid.UUID] | None = None
+    if reply_to is not None:
+        try:
+            reply_target = (reply_to["kind"], uuid.UUID(reply_to["id"]))
+        except (TypeError, KeyError, ValueError, AttributeError):
+            reply_target = None
+        if reply_target is None or reply_target[0] not in ("message", "file"):
+            await _send_error(websocket, "invalid_reply", "reply_to must name a message or a file", client_id)
+            return
+
     limiter = websocket.app.state.message_rate
     rate_key = str(conn.participant_id)
     if limiter.is_limited(rate_key):
@@ -134,7 +147,32 @@ async def _handle_message_send(websocket: WebSocket, conn: Connection, frame: di
             await websocket.close(CLOSE_ROOM_EXPIRED, "Room expired")
             raise _Closed
 
-        message = Message(room_id=conn.room_id, participant=participant, content=content, created_at=now)
+        quoted_message: Message | None = None
+        quoted_file: RoomFile | None = None
+        if reply_target is not None:
+            kind, target_id = reply_target
+            model = Message if kind == "message" else RoomFile
+            target = await session.scalar(
+                select(model)
+                .options(joinedload(model.participant))
+                .where(model.id == target_id, model.room_id == conn.room_id, model.deleted_at.is_(None))
+            )
+            if target is None:
+                await _send_error(websocket, "invalid_reply", "What you replied to isn't in this room", client_id)
+                return
+            if kind == "message":
+                quoted_message = target
+            else:
+                quoted_file = target
+
+        message = Message(
+            room_id=conn.room_id,
+            participant=participant,
+            content=content,
+            created_at=now,
+            reply_to_message=quoted_message,
+            reply_to_file=quoted_file,
+        )
         participant.room.last_activity_at = now
         session.add(message)
         await session.commit()

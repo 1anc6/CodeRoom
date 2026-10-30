@@ -71,6 +71,18 @@ export const Retry = (p: IconProps) => (
   </Icon>
 );
 
+export const Reply = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M9 15 4 10l5-5M4 10h10a6 6 0 0 1 6 6v3" />
+  </Icon>
+);
+
+export const Play = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M8 5.5v13l10.5-6.5L8 5.5z" fill="currentColor" />
+  </Icon>
+);
+
 export const Door = (p: IconProps) => (
   <Icon {...p}>
     <path d="M14 20H5V4h9M10 12h10M17 9l3 3-3 3" />

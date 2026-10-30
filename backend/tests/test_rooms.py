@@ -108,6 +108,50 @@ async def test_code_of_an_expired_room_can_be_reused(app, client, monkeypatch):
     assert joined.json()["room"]["id"] == second["room"]["id"]
 
 
+async def test_chosen_code_is_used_as_the_room_code(client):
+    data = await create_room(client, code="kitchenparty")
+
+    assert data["code"] == "KITCHENPARTY"
+    joined = await join_room(client, "KitchenParty")
+    assert joined.status_code == 200
+    assert joined.json()["room"]["id"] == data["room"]["id"]
+
+
+async def test_chosen_code_is_stored_only_as_a_keyed_hash(app, client):
+    data = await create_room(client, code="LETMEIN42")
+
+    async with app.state.sessionmaker() as session:
+        room = await session.get(Room, uuid.UUID(data["room"]["id"]))
+    assert room.code_hash != "LETMEIN42"
+    assert len(room.code_hash) == 64
+
+
+@pytest.mark.parametrize("code", ["abc", "ABCDEFGHIJKLM", "ab cd", "ab-cd", "héllo", ""])
+async def test_invalid_chosen_codes_are_rejected(client, code):
+    response = await client.post("/api/rooms", json={"display_name": "Alice", "code": code})
+    assert response.status_code == 422
+
+
+async def test_chosen_code_already_in_use_is_refused(client):
+    await create_room(client, code="TAKEN1")
+
+    response = await client.post("/api/rooms", json={"display_name": "Bob", "code": "taken1"})
+    assert response.status_code == 409
+
+
+async def test_chosen_code_can_be_reused_once_its_room_has_expired(app, client):
+    first = await create_room(client, code="SPRINT")
+    await expire_room(app, first["room"]["id"])
+
+    second = await create_room(client, code="sprint")
+    assert second["code"] == "SPRINT"
+
+
+async def test_chosen_code_can_be_a_five_digit_number(client):
+    data = await create_room(client, code="48213")
+    assert data["code"] == "48213"
+
+
 # --- Joining rooms --------------------------------------------------------------------
 
 
@@ -135,7 +179,7 @@ async def test_wrong_code_is_rejected(client):
     assert response.status_code == 404
 
 
-@pytest.mark.parametrize("code", ["1234", "123456", "12a45", "١٢٣٤٥", " 12345"])
+@pytest.mark.parametrize("code", ["123", "1234567890123", "12-45", "12 45", "ab_cd", "١٢٣٤٥"])
 async def test_malformed_codes_are_rejected(client, code):
     response = await join_room(client, code)
     assert response.status_code == 422

@@ -14,12 +14,14 @@
   --ink-strong: #2a2724;    /* derived: text set on brass */
   --ink-soft: #635a51;      /* derived: secondary text and placeholders, 6.1:1 on the ground, 5:1 on surface-2 */
   --on-ink: #f6f4f2;
+  --line: rgba(66, 62, 59, 0.13); /* derived: hairline borders between panels and rows */
   --online: #6f8a62;
   --danger: #9b3b2e;
   --danger-bg: #f3e3df;
 
-  --font-display: "League Spartan", "Figtree", system-ui, sans-serif;
-  --font-text: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* One grotesk for everything: Geist, with tabular figures for codes, clocks and sizes. */
+  --font-display: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-text: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
 
   --step-small: clamp(0.8125rem, 0.79rem + 0.1vw, 0.875rem);
   --step-body: clamp(1rem, 0.96rem + 0.2vw, 1.125rem);
@@ -203,11 +205,6 @@ video {
   font-size: 1.375rem;
   letter-spacing: -0.03em;
   text-decoration: none;
-  padding-top: 3px;
-}
-
-.wordmark svg {
-  margin-top: -3px;
 }
 
 /* People: a stable initial on a pale tint of their own. */

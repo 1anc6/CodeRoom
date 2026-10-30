@@ -53,7 +53,7 @@ export function People({ session, members }: PeopleProps) {
 
       <div className="invite">
         <h3 className="invite__title">Bring someone in</h3>
-        <p className="invite__text">Read out these five digits. Anyone who types them can join until the room closes.</p>
+        <p className="invite__text">Read out this code. Anyone who types it can join until the room closes.</p>
         <div className="invite__code tabular" aria-hidden="true">
           {session.code.split("").map((d, i) => (
             <span key={i}>{d}</span>

@@ -171,6 +171,33 @@
   font-size: var(--step-small);
 }
 
+.door__field-hint {
+  margin-top: 8px;
+  color: var(--ink-soft);
+  font-size: var(--step-small);
+}
+
+.door__own {
+  margin-top: 24px;
+}
+
+.door__check {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-size: var(--step-small);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.door__check input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--ink);
+}
+
 .door__chips {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -242,8 +269,19 @@
 
 .code-input__cells {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--cells, 5), minmax(0, 1fr));
   gap: 8px;
+}
+
+/* A chosen code can run to twelve characters: smaller cells keep them all on one row. */
+.code-input.is-long .code-input__cells {
+  gap: 4px;
+}
+
+.code-input.is-long .code-input__cell {
+  height: 56px;
+  border-radius: 10px;
+  font-size: 1.5rem;
 }
 
 .code-input__cell {
@@ -257,7 +295,6 @@
   font-weight: 700;
   font-size: 2.5rem;
   line-height: 1;
-  padding-top: 6px;
   font-variant-numeric: tabular-nums;
   transition:
     border-color var(--dur),
@@ -646,7 +683,6 @@
   display: grid;
   place-items: center;
   height: 60px;
-  padding-top: 5px;
   border: 1px solid var(--field);
   border-radius: 12px;
   background: var(--card);

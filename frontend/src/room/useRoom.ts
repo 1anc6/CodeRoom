@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, getFiles, getMessages, leaveRoom, uploadFile } from "../api/client";
-import type { FileOut, MemberOut, MessageOut, RoomSession, ServerFrame } from "../api/types";
+import type { FileOut, MemberOut, MessageOut, ReplyOut, RoomSession, ServerFrame } from "../api/types";
 import { makeId, parseServerTime } from "../lib/format";
 
 export const MAX_MESSAGE_LENGTH = 4000;
@@ -272,19 +272,20 @@ export function useRoom(session: RoomSession) {
     return () => window.clearTimeout(timer);
   }, [session.room.expires_at, end]);
 
-  const transmit = useCallback((clientId: string, content: string): boolean => {
+  const transmit = useCallback((clientId: string, content: string, replyTo: ReplyOut | null): boolean => {
     const ws = socketRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) return false;
-    ws.send(JSON.stringify({ type: "message.send", content, client_id: clientId }));
+    const reply_to = replyTo ? { kind: replyTo.kind, id: replyTo.id } : undefined;
+    ws.send(JSON.stringify({ type: "message.send", content, client_id: clientId, reply_to }));
     return true;
   }, []);
 
   const sendMessage = useCallback(
-    (raw: string) => {
+    (raw: string, replyTo: ReplyOut | null = null) => {
       const content = raw.trim();
       if (!content || content.length > MAX_MESSAGE_LENGTH) return;
       const clientId = makeId();
-      const sent = transmit(clientId, content);
+      const sent = transmit(clientId, content, replyTo);
       setMessages((list) => [
         ...list,
         {
@@ -294,6 +295,7 @@ export function useRoom(session: RoomSession) {
           display_name: session.participant.display_name,
           content,
           created_at: new Date().toISOString(),
+          reply_to: replyTo,
           state: sent ? "pending" : "failed",
           error: sent ? undefined : "Not connected. Tap to retry.",
         },
@@ -306,7 +308,7 @@ export function useRoom(session: RoomSession) {
     (clientId: string) => {
       const message = messagesRef.current.find((m) => m.clientId === clientId);
       if (!message) return;
-      const sent = transmit(clientId, message.content);
+      const sent = transmit(clientId, message.content, message.reply_to);
       setMessages((list) =>
         list.map((m) =>
           m.clientId === clientId

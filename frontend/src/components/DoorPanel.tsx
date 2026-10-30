@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { ApiError, createRoom, joinRoom } from "../api/client";
 import { lastName, rememberName, saveSession } from "../session";
-import { CodeInput } from "./CodeInput";
+import { CodeInput, ROOM_CODE_RULE, isValidRoomCode } from "./CodeInput";
 import { ArrowRight } from "./Icons";
 
 export type DoorMode = "create" | "join";
@@ -27,8 +27,10 @@ interface DoorPanelProps {
 
 function friendlyError(error: unknown, mode: DoorMode): string {
   if (!(error instanceof ApiError)) return "Something went wrong. Try again.";
-  if (error.status === 404) return "No open room has that code. Check the digits with whoever made it.";
-  if (error.status === 409) return "That room is full. Twenty people is the limit.";
+  if (error.status === 404) return "No open room has that code. Check it with whoever made the room.";
+  if (error.status === 409) {
+    return mode === "create" ? "That code is already in use. Choose another." : "That room is full. Twenty people is the limit.";
+  }
   if (error.status === 429) {
     const wait = error.retryAfter ? ` in ${Math.ceil(error.retryAfter)} seconds` : " in a minute";
     return mode === "join" ? `Too many wrong codes. Try again${wait}.` : `Too many rooms started from here. Try again${wait}.`;
@@ -43,11 +45,14 @@ export function DoorPanel({ mode, onModeChange, focusRequest, initialCode = "", 
   const [name, setName] = useState(lastName);
   const [code, setCode] = useState(initialCode);
   const [lifetime, setLifetime] = useState(DEFAULT_LIFETIME);
+  const [ownCode, setOwnCode] = useState(false);
+  const [chosen, setChosen] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
   const codeRef = useRef<HTMLInputElement>(null);
+  const chosenRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!focusRequest) return;
@@ -58,7 +63,8 @@ export function DoorPanel({ mode, onModeChange, focusRequest, initialCode = "", 
 
   const trimmed = name.trim();
   const nameMissing = touched && !trimmed;
-  const codeIncomplete = touched && mode === "join" && code.length !== 5;
+  const codeIncomplete = touched && mode === "join" && !isValidRoomCode(code);
+  const chosenIncomplete = touched && mode === "create" && ownCode && !isValidRoomCode(chosen);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -68,13 +74,18 @@ export function DoorPanel({ mode, onModeChange, focusRequest, initialCode = "", 
       nameRef.current?.focus();
       return;
     }
-    if (mode === "join" && code.length !== 5) {
+    if (mode === "join" && !isValidRoomCode(code)) {
       codeRef.current?.focus();
+      return;
+    }
+    if (mode === "create" && ownCode && !isValidRoomCode(chosen)) {
+      chosenRef.current?.focus();
       return;
     }
     setBusy(true);
     try {
-      const session = mode === "create" ? await createRoom(trimmed, lifetime) : await joinRoom(code, trimmed);
+      const session =
+        mode === "create" ? await createRoom(trimmed, lifetime, ownCode ? chosen : undefined) : await joinRoom(code, trimmed);
       rememberName(trimmed);
       saveSession(session);
       navigate(`/room/${session.room.id}`);
@@ -141,28 +152,64 @@ export function DoorPanel({ mode, onModeChange, focusRequest, initialCode = "", 
           />
           {codeIncomplete && (
             <p className="door__field-error" id={`${uid}-code-err`}>
-              Room codes are five digits.
+              {ROOM_CODE_RULE}
             </p>
           )}
         </div>
       ) : (
-        <fieldset className="door__field door__lifetime">
-          <legend>Room stays open for</legend>
-          <div className="door__chips">
-            {LIFETIMES.map(([minutes, label]) => (
-              <label key={minutes} className="chip">
-                <input
-                  type="radio"
-                  name={`${uid}-lifetime`}
-                  value={minutes}
-                  checked={lifetime === minutes}
-                  onChange={() => setLifetime(minutes)}
-                />
-                <span>{label}</span>
-              </label>
-            ))}
+        <>
+          <fieldset className="door__field door__lifetime">
+            <legend>Room stays open for</legend>
+            <div className="door__chips">
+              {LIFETIMES.map(([minutes, label]) => (
+                <label key={minutes} className="chip">
+                  <input
+                    type="radio"
+                    name={`${uid}-lifetime`}
+                    value={minutes}
+                    checked={lifetime === minutes}
+                    onChange={() => setLifetime(minutes)}
+                  />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          <div className="door__own">
+            <label className="door__check">
+              <input
+                type="checkbox"
+                checked={ownCode}
+                onChange={(e) => {
+                  setOwnCode(e.target.checked);
+                  setError(null);
+                }}
+              />
+              <span>Choose my own code</span>
+            </label>
           </div>
-        </fieldset>
+
+          {ownCode && (
+            <div className="door__field">
+              <label htmlFor={`${uid}-own`}>Your room code</label>
+              <CodeInput
+                ref={chosenRef}
+                id={`${uid}-own`}
+                value={chosen}
+                onChange={(v) => {
+                  setChosen(v);
+                  setError(null);
+                }}
+                invalid={chosenIncomplete || Boolean(error)}
+                describedBy={chosenIncomplete ? `${uid}-own-err` : undefined}
+              />
+              <p className={chosenIncomplete ? "door__field-error" : "door__field-hint"} id={`${uid}-own-err`}>
+                {chosenIncomplete ? ROOM_CODE_RULE : "Letters and digits only, no spaces. Capitals don't matter."}
+              </p>
+            </div>
+          )}
+        </>
       )}
 
       <div className="door__error" role="alert" aria-live="assertive">
@@ -176,8 +223,10 @@ export function DoorPanel({ mode, onModeChange, focusRequest, initialCode = "", 
 
       <p className="door__note">
         {mode === "create"
-          ? "You'll get a five-digit code to read out. No account needed."
-          : "Ask whoever made the room for its five digits."}
+          ? ownCode
+            ? "People type your code to join. No account needed."
+            : "You'll get a five-digit code to read out. No account needed."
+          : "Ask whoever made the room for its code."}
       </p>
     </form>
   );

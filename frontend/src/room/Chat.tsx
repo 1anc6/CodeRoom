@@ -1,14 +1,19 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
-import type { FileOut, RoomSession } from "../api/types";
-import { ArrowUp, Paperclip, Retry } from "../components/Icons";
+import type { FileOut, ReplyOut, RoomSession } from "../api/types";
+import { ArrowUp, Close, Paperclip, Retry } from "../components/Icons";
 import { formatClock, initials, parseServerTime, tintFor } from "../lib/format";
 import { ACCEPT } from "./Files";
 import { FileRow } from "./FileRow";
+import { MediaMessage } from "./MediaMessage";
+import { Quote } from "./Quote";
+import { ReplyRow } from "./ReplyRow";
+import { isPreviewable } from "./fileUrls";
 import { MAX_MESSAGE_LENGTH, type ChatMessage, type Connection } from "./useRoom";
 
 type Item = { kind: "msg"; at: number; message: ChatMessage } | { kind: "file"; at: number; file: FileOut };
 
 const GROUP_GAP_MS = 5 * 60 * 1000;
+const COMPOSER_MAX_HEIGHT = 168;
 const URL_PATTERN = /(https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]])/g;
 
 /** Message text with web addresses turned into links. Content is always rendered as text. */
@@ -24,6 +29,22 @@ function withLinks(text: string): ReactNode[] {
   );
 }
 
+function senderOf(item: Item): string {
+  return item.kind === "msg" ? item.message.participant_id : item.file.participant_id;
+}
+
+function rowId(kind: ReplyOut["kind"], id: string): string {
+  return `${kind === "message" ? "m" : "f"}-${id}`;
+}
+
+function quoteMessage(m: ChatMessage): ReplyOut {
+  return { kind: "message", id: m.id, participant_id: m.participant_id, display_name: m.display_name, text: m.content.slice(0, 200), mime_type: null };
+}
+
+function quoteFile(f: FileOut): ReplyOut {
+  return { kind: "file", id: f.id, participant_id: f.participant_id, display_name: f.display_name, text: f.name, mime_type: f.mime_type };
+}
+
 interface ChatProps {
   session: RoomSession;
   connection: Connection;
@@ -33,7 +54,7 @@ interface ChatProps {
   hasOlder: boolean;
   loadingOlder: boolean;
   onLoadOlder: () => Promise<void>;
-  onSend: (text: string) => void;
+  onSend: (text: string, replyTo: ReplyOut | null) => void;
   onRetry: (clientId: string) => void;
   onUpload: (files: File[]) => void;
   onPreview: (file: FileOut) => void;
@@ -60,6 +81,7 @@ export function Chat({
   const live = connection === "live";
 
   const [draft, setDraft] = useState("");
+  const [replyTo, setReplyTo] = useState<ReplyOut | null>(null);
   const [dragging, setDragging] = useState(false);
   const [unseen, setUnseen] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
@@ -105,10 +127,7 @@ export function Chat({
   // Something new at the bottom: follow it if we were already there or it's ours.
   useLayoutEffect(() => {
     if (!lastItem) return;
-    const mine =
-      (lastItem.kind === "msg" && lastItem.message.participant_id === meId) ||
-      (lastItem.kind === "file" && lastItem.file.participant_id === meId);
-    if (atBottomRef.current || mine) {
+    if (atBottomRef.current || senderOf(lastItem) === meId) {
       scrollToBottom();
       setUnseen(0);
     } else {
@@ -120,6 +139,11 @@ export function Chat({
   useEffect(() => {
     if (historyLoaded) scrollToBottom();
   }, [historyLoaded]);
+
+  // Images load after they are placed, so a bottom-anchored view has to follow them down.
+  function keepAtBottom() {
+    if (atBottomRef.current) scrollToBottom();
+  }
 
   function onScroll() {
     const list = listRef.current;
@@ -138,16 +162,38 @@ export function Chat({
     const el = textRef.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 168)}px`;
+    el.style.height = `${Math.min(el.scrollHeight, COMPOSER_MAX_HEIGHT)}px`;
+    // A scrollbar only once the text outgrows the box, not a stray one on a single line.
+    el.style.overflowY = el.scrollHeight > COMPOSER_MAX_HEIGHT ? "auto" : "hidden";
   }
 
   useEffect(autosize, [draft]);
 
+  function startReply(reply: ReplyOut) {
+    setReplyTo(reply);
+    textRef.current?.focus();
+  }
+
+  /** Brings the quoted original into view and marks it for a moment, as chat apps do. */
+  function jumpTo(reply: ReplyOut) {
+    const row = document.getElementById(rowId(reply.kind, reply.id));
+    if (!row) {
+      onError(hasOlder ? "That's further back. Show earlier messages to find it." : "That's no longer in the room.");
+      return;
+    }
+    row.scrollIntoView({ block: "center", behavior: "smooth" });
+    row.classList.remove("is-flash");
+    void row.offsetWidth;
+    row.classList.add("is-flash");
+    window.setTimeout(() => row.classList.remove("is-flash"), 1600);
+  }
+
   function send() {
     const text = draft.trim();
     if (!text || !live || text.length > MAX_MESSAGE_LENGTH) return;
-    onSend(text);
+    onSend(text, replyTo);
     setDraft("");
+    setReplyTo(null);
     atBottomRef.current = true;
     textRef.current?.focus();
   }
@@ -157,6 +203,7 @@ export function Chat({
   }
 
   const remaining = MAX_MESSAGE_LENGTH - draft.length;
+  const quoteProps = { meId, files, roomId, token: session.token };
 
   return (
     <section
@@ -212,56 +259,87 @@ export function Chat({
 
           {items.map((item, index) => {
             const prev = items[index - 1];
-            if (item.kind === "file") {
-              const mine = item.file.participant_id === meId;
-              return (
-                <div key={`f-${item.file.id}`} className={`shared${mine ? " shared--mine" : ""}`}>
-                  <span className="shared__who">
-                    {mine ? "You" : item.file.display_name} shared a file · {formatClock(item.file.created_at)}
+            const sender = senderOf(item);
+            const mine = sender === meId;
+            const startsGroup = !prev || senderOf(prev) !== sender || item.at - prev.at > GROUP_GAP_MS;
+            const name = item.kind === "msg" ? item.message.display_name : item.file.display_name;
+            const avatar = !mine && (
+              <span className="row__avatar" aria-hidden="true">
+                {startsGroup && (
+                  <span className="avatar" style={{ background: tintFor(sender) }}>
+                    {initials(name)}
                   </span>
-                  <FileRow
-                    file={item.file}
-                    roomId={roomId}
-                    token={session.token}
-                    onPreview={onPreview}
-                    onError={onError}
-                    variant="card"
-                    showSender={false}
-                  />
-                </div>
+                )}
+              </span>
+            );
+            const rowClass = startsGroup ? "is-first" : "";
+
+            if (item.kind === "file") {
+              const file = item.file;
+              const kind = isPreviewable(file);
+              return (
+                <ReplyRow
+                  key={`f-${file.id}`}
+                  id={rowId("file", file.id)}
+                  className={rowClass}
+                  mine={mine}
+                  label={`Reply to ${mine ? "your" : `${name}'s`} ${kind === "image" ? "photo" : kind === "video" ? "video" : "file"}`}
+                  onReply={() => startReply(quoteFile(file))}
+                >
+                  {avatar}
+                  {kind ? (
+                    <MediaMessage
+                      file={file}
+                      kind={kind}
+                      roomId={roomId}
+                      token={session.token}
+                      name={!mine && startsGroup ? name : undefined}
+                      onPreview={onPreview}
+                      onLoad={keepAtBottom}
+                    />
+                  ) : (
+                    <div className="shared">
+                      {!mine && startsGroup && <span className="shared__who">{name}</span>}
+                      <FileRow
+                        file={file}
+                        roomId={roomId}
+                        token={session.token}
+                        onPreview={onPreview}
+                        onError={onError}
+                        variant="card"
+                        showSender={false}
+                      />
+                    </div>
+                  )}
+                </ReplyRow>
               );
             }
 
             const m = item.message;
-            const mine = m.participant_id === meId;
-            const startsGroup =
-              !prev ||
-              prev.kind !== "msg" ||
-              prev.message.participant_id !== m.participant_id ||
-              item.at - prev.at > GROUP_GAP_MS;
-
+            const time = m.state === "pending" ? "Sending…" : m.state === "failed" ? "Not sent" : formatClock(m.created_at);
             return (
-              <div
+              <ReplyRow
                 key={m.clientId ?? m.id}
-                className={`msg${mine ? " msg--mine" : ""}${startsGroup ? " msg--first" : ""}${m.state ? ` is-${m.state}` : ""}`}
+                id={m.state ? undefined : rowId("message", m.id)}
+                className={`${rowClass}${m.state ? ` is-${m.state}` : ""}`}
+                mine={mine}
+                label={`Reply to ${mine ? "your message" : name}`}
+                onReply={m.state ? undefined : () => startReply(quoteMessage(m))}
               >
-                {!mine && (
-                  <span className="msg__avatar" aria-hidden="true">
-                    {startsGroup && (
-                      <span className="avatar" style={{ background: tintFor(m.participant_id) }}>
-                        {initials(m.display_name)}
+                {avatar}
+                <div className="msg">
+                  <div className={`bubble${m.reply_to ? " has-quote" : ""}`}>
+                    {!mine && startsGroup && <span className="bubble__name">{name}</span>}
+                    {m.reply_to && <Quote reply={m.reply_to} {...quoteProps} onJump={jumpTo} />}
+                    <p className="bubble__text">
+                      {withLinks(m.content)}
+                      {/* Holds room on the last line for the time, which sits in the corner. */}
+                      <span className="bubble__spacer" aria-hidden="true">
+                        {time}
                       </span>
-                    )}
-                  </span>
-                )}
-                <div className="msg__body">
-                  {startsGroup && (
-                    <span className="msg__meta">
-                      {!mine && <strong>{m.display_name}</strong>}
-                      <span>{m.state === "pending" ? "Sending…" : formatClock(m.created_at)}</span>
-                    </span>
-                  )}
-                  <p className="msg__bubble">{withLinks(m.content)}</p>
+                    </p>
+                    <span className="bubble__time tabular">{time}</span>
+                  </div>
                   {m.state === "failed" && m.clientId && (
                     <button type="button" className="msg__retry" onClick={() => onRetry(m.clientId!)}>
                       <Retry size={14} />
@@ -269,7 +347,7 @@ export function Chat({
                     </button>
                   )}
                 </div>
-              </div>
+              </ReplyRow>
             );
           })}
         </div>
@@ -295,65 +373,89 @@ export function Chat({
           send();
         }}
       >
-        <button
-          type="button"
-          className="icon-btn composer__attach"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={!live}
-          aria-label="Share files"
-          title="Share files"
-        >
-          <Paperclip size={20} />
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept={ACCEPT}
-          hidden
-          onChange={(e) => {
-            if (e.target.files?.length) onUpload(Array.from(e.target.files));
-            e.target.value = "";
-          }}
-        />
-        <label htmlFor="composer-text" className="visually-hidden">
-          Message
-        </label>
-        <textarea
-          id="composer-text"
-          ref={textRef}
-          className="composer__text"
-          rows={1}
-          value={draft}
-          placeholder={live ? "Write to the room" : "Reconnecting, hold on…"}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-              e.preventDefault();
-              send();
-            }
-          }}
-          onPaste={(e) => {
-            const pasted = Array.from(e.clipboardData.files);
-            if (pasted.length && live) {
-              e.preventDefault();
-              onUpload(pasted);
-            }
-          }}
-        />
-        {remaining < 400 && (
-          <span className={`composer__count tabular${remaining < 0 ? " is-over" : ""}`} aria-live="polite">
-            {remaining}
-          </span>
+        {replyTo && (
+          <div className="composer__reply">
+            <Quote reply={replyTo} {...quoteProps} />
+            <button
+              type="button"
+              className="icon-btn icon-btn--small"
+              onClick={() => {
+                setReplyTo(null);
+                textRef.current?.focus();
+              }}
+              aria-label="Cancel reply"
+              title="Cancel reply"
+            >
+              <Close size={16} />
+            </button>
+          </div>
         )}
-        <button
-          type="submit"
-          className="composer__send"
-          disabled={!live || !draft.trim() || remaining < 0}
-          aria-label="Send message"
-        >
-          <ArrowUp size={20} />
-        </button>
+        <div className="composer__row">
+          <button
+            type="button"
+            className="icon-btn composer__attach"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={!live}
+            aria-label="Share files"
+            title="Share files"
+          >
+            <Paperclip size={20} />
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept={ACCEPT}
+            hidden
+            onChange={(e) => {
+              if (e.target.files?.length) onUpload(Array.from(e.target.files));
+              e.target.value = "";
+            }}
+          />
+          <div className="composer__field">
+            <label htmlFor="composer-text" className="visually-hidden">
+              {replyTo ? `Reply to ${replyTo.participant_id === meId ? "yourself" : replyTo.display_name}` : "Message"}
+            </label>
+            <textarea
+              id="composer-text"
+              ref={textRef}
+              className="composer__text"
+              rows={1}
+              value={draft}
+              placeholder={live ? (replyTo ? "Write a reply" : "Write to the room") : "Reconnecting, hold on…"}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape" && replyTo) {
+                  e.preventDefault();
+                  setReplyTo(null);
+                } else if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  send();
+                }
+              }}
+              onPaste={(e) => {
+                const pasted = Array.from(e.clipboardData.files);
+                if (pasted.length && live) {
+                  e.preventDefault();
+                  onUpload(pasted);
+                }
+              }}
+            />
+            {remaining < 400 && (
+              <span className={`composer__count tabular${remaining < 0 ? " is-over" : ""}`} aria-live="polite">
+                {remaining}
+              </span>
+            )}
+          </div>
+          <button
+            type="submit"
+            className="composer__send"
+            disabled={!live || !draft.trim() || remaining < 0}
+            aria-label={replyTo ? "Send reply" : "Send message"}
+          >
+            <ArrowUp size={20} />
+          </button>
+        </div>
       </form>
 
       {dragging && (

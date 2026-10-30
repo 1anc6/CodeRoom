@@ -31,12 +31,23 @@ export interface RoomDetails {
   participants: MemberOut[];
 }
 
+/** What a reply quotes: the start of a message, or a shared file's name and type. */
+export interface ReplyOut {
+  kind: "message" | "file";
+  id: string;
+  participant_id: string;
+  display_name: string;
+  text: string;
+  mime_type: string | null;
+}
+
 export interface MessageOut {
   id: string;
   participant_id: string;
   display_name: string;
   content: string;
   created_at: string;
+  reply_to: ReplyOut | null;
 }
 
 export interface MessagePage {

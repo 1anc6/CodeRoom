@@ -52,10 +52,11 @@ async function request<T>(path: string, init: RequestInit = {}, token?: string):
   return (await response.json()) as T;
 }
 
-export function createRoom(displayName: string, lifetimeMinutes: number): Promise<RoomSession> {
+/** Without a code the server picks a five-digit one; with one, it's the code people type to join. */
+export function createRoom(displayName: string, lifetimeMinutes: number, code?: string): Promise<RoomSession> {
   return request<RoomSession>("/rooms", {
     method: "POST",
-    body: JSON.stringify({ display_name: displayName, lifetime_minutes: lifetimeMinutes }),
+    body: JSON.stringify({ display_name: displayName, lifetime_minutes: lifetimeMinutes, ...(code ? { code } : {}) }),
   });
 }
 
