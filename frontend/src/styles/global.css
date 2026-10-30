@@ -19,8 +19,10 @@
   --danger: #9b3b2e;
   --danger-bg: #f3e3df;
 
-  /* One grotesk for everything: Geist, with tabular figures for codes, clocks and sizes. */
-  --font-display: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Italiana, a thin high-contrast display face (a free stand-in for Cosi Times), for headings, the
+     wordmark and codes; Geist for everything you read or type, with tabular figures for clocks and sizes.
+     Italiana has one weight, so display text stays at 400. */
+  --font-display: "Italiana", "Didot", "Bodoni MT", Georgia, serif;
   --font-text: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
 
   --step-small: clamp(0.8125rem, 0.79rem + 0.1vw, 0.875rem);
@@ -67,9 +69,9 @@ h2,
 h3 {
   margin: 0;
   font-family: var(--font-display);
-  font-weight: 700;
-  letter-spacing: -0.035em;
-  line-height: 0.92;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1;
   text-wrap: balance;
 }
 
@@ -201,9 +203,9 @@ video {
   align-items: center;
   gap: 10px;
   font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 1.375rem;
-  letter-spacing: -0.03em;
+  font-weight: 400;
+  font-size: 1.625rem;
+  letter-spacing: 0.01em;
   text-decoration: none;
 }
 
