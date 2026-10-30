@@ -204,7 +204,7 @@ The server replies with `ready`, then streams events.
 | Direction | Type | Fields |
 |---|---|---|
 | client → server | `auth` | `token` |
-| client → server | `message.send` | `content` (1–4000 chars), optional `client_id` (≤ 64 chars), optional `reply_to` (`{"kind": "message" \| "file", "id": ...}` in the same room) |
+| client → server | `message.send` | `content` (1–10000 chars), optional `client_id` (≤ 64 chars), optional `reply_to` (`{"kind": "message" \| "file", "id": ...}` in the same room) |
 | client → server | `typing` | sent at most every few seconds while someone types; nothing is stored |
 | client → server | `ping` | |
 | server → client | `ready` | `me`, `participants` (each with `online`) |

@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     room_create_limit: int = 10
     room_create_window_seconds: int = 600
 
-    max_message_length: int = 4000
+    max_message_length: int = 10000
     message_rate_limit: int = 20
     message_rate_window_seconds: int = 10
     max_connections_per_participant: int = 5

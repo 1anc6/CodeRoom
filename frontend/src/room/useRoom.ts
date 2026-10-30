@@ -15,7 +15,7 @@ import type { FileOut, MemberOut, MessageOut, ReplyOut, RoomOut, RoomSession, Se
 import { makeId, parseServerTime } from "../lib/format";
 import { saveSession } from "../session";
 
-export const MAX_MESSAGE_LENGTH = 4000;
+export const MAX_MESSAGE_LENGTH = 10000;
 export const MAX_FILE_BYTES = 25 * 1024 * 1024;
 
 export type Connection = "connecting" | "live" | "reconnecting" | "ended";

@@ -183,7 +183,7 @@ def test_multiline_and_unicode_content_is_kept_verbatim(live_client):
         ({"type": "message.send", "content": "   "}, "invalid_message"),
         ({"type": "message.send", "content": 42}, "invalid_message"),
         ({"type": "message.send", "content": "bad\x00byte"}, "invalid_message"),
-        ({"type": "message.send", "content": "x" * 4001}, "message_too_long"),
+        ({"type": "message.send", "content": "x" * 10001}, "message_too_long"),
         ({"type": "dance"}, "unknown_type"),
     ],
 )
