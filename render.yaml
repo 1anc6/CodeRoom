@@ -1,4 +1,4 @@
-# Render Blueprint for the API and its database. The frontend is hosted on Vercel (frontend/vercel.json).
+# Render Blueprint for the API and its database. The frontend is hosted on Vercel (vercel.json at the repo root).
 services:
   - type: web
     name: coderoom-api
