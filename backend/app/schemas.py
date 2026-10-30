@@ -82,3 +82,19 @@ class MessagePageOut(BaseModel):
     messages: list[MessageOut]
     # Whether more messages exist beyond this page in the direction requested.
     has_more: bool
+
+
+class FileOut(BaseModel):
+    id: uuid.UUID
+    participant_id: uuid.UUID
+    display_name: str
+    name: str
+    mime_type: str
+    size_bytes: int
+    created_at: datetime
+
+
+class FileListOut(BaseModel):
+    files: list[FileOut]
+    # True if the room has more files than this list returns (only the newest are listed).
+    has_more: bool

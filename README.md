@@ -10,9 +10,9 @@ The full product and architecture plan is in [CodeRoom_Project_Blueprint.pdf](Co
 | M0 Setup | Repo, FastAPI backend, Postgres via Docker, Alembic, tests | Done |
 | M1 Rooms and join | Create room, join by code, room-scoped sessions, expiry checks, rate limits | Done |
 | M2 Real-time chat | WebSockets, message history, presence, reconnect | Done |
-| M3 File sharing | Uploads/downloads through the API, quotas, type checks | Next |
-| M4 Expiration | Cleanup worker that revokes access and deletes stored files | |
-| M5 Harden and deploy | Abuse controls, failure testing, hosting | |
+| M3 File sharing | Uploads/downloads through the API, quotas, type checks | Done (local disk storage) |
+| M4 Expiration | Cleanup worker that revokes access and deletes stored files | Next |
+| M5 Harden and deploy | Abuse controls, failure testing, Cloudflare R2 storage adapter, hosting | |
 | Frontend | React + Vite + TypeScript | Not started |
 
 ## Layout
@@ -22,10 +22,12 @@ backend/              FastAPI app
   app/
     main.py           app factory, CORS, rate limiters
     config.py         settings (CODEROOM_* env vars)
-    models.py         rooms, participants, messages
-    routers/          rooms, message history, WebSocket endpoint
+    models.py         rooms, participants, messages, files
+    routers/          rooms, message history, files, WebSocket endpoint
     realtime.py       live connections per room: broadcast, presence, expiry
     messages.py       message queries shared by HTTP and WebSocket routes
+    storage.py        file storage interface; local-disk implementation
+    file_types.py     allowed upload types, detected from file contents
     security.py       room codes and session tokens
     rate_limit.py     in-memory sliding-window limiter
   alembic/            database migrations
@@ -97,12 +99,45 @@ by create or join. Tokens are never put in URLs.
 | POST | `/api/rooms/join` | Join with `code` and `display_name`. Same response shape as create. |
 | GET | `/api/rooms/{room_id}` | Room details and current participants, each with an `online` flag. |
 | GET | `/api/rooms/{room_id}/messages` | Message history, oldest first. See below. |
+| POST | `/api/rooms/{room_id}/files?name=<file name>` | Upload a file. The body is the raw file bytes. See below. |
+| GET | `/api/rooms/{room_id}/files` | The room's files (newest 200), oldest first. |
+| GET | `/api/rooms/{room_id}/files/{file_id}` | Download a file. |
 | DELETE | `/api/rooms/{room_id}/leave` | Leave the room. The session token stops working and open sockets close. |
 | WS | `/api/rooms/{room_id}/ws` | Real-time connection. See below. |
 | GET | `/api/health` | Health check. |
 
 Status codes worth knowing: `404` unknown or expired code on join, `409` room full, `410` room expired,
-`429` rate limited (with `Retry-After`).
+`413` file too large or room out of space, `415` file type not allowed, `429` rate limited (with
+`Retry-After`).
+
+### Files
+
+Upload by sending the file itself as the request body, not as a multipart form, with its name in the
+`name` query parameter. In a browser that's `fetch(url, {method: "POST", body: file, headers})`, or
+`XMLHttpRequest` if you want upload progress. The server streams the body to storage as it arrives.
+
+- **Limits:** 25 MB per file, 100 MB per room in total, 10 uploads per minute per participant. Uploads
+  that cross a limit are refused before or while streaming, and nothing partial is kept.
+- **Types:** decided from the file's first bytes. The `Content-Type` the client sends is ignored.
+  Allowed: JPEG, PNG, GIF, WebP, HEIC, AVIF images; PDF; Word, Excel, PowerPoint and OpenDocument
+  files; `.txt`, `.md` and `.csv` text in UTF-8; MP4, MOV, WebM and MKV video. Anything else, including
+  HTML, SVG, archives and programs, gets `415`.
+- **Names:** folders and control characters are stripped. If the extension doesn't match the detected
+  type, the right one is added, so `photo.exe` holding a PNG becomes `photo.exe.png`.
+- **Storage:** each file is stored under a random key in `CODEROOM_STORAGE_DIR` (default
+  `data/uploads`). Client file names never reach the storage path.
+- **Live event:** a successful upload sends `file.ready` to everyone connected to the room. Its `file`
+  has the same shape as the upload response: `{id, participant_id, display_name, name, mime_type,
+  size_bytes, created_at}`.
+
+Downloads need the same `Authorization` header as other endpoints, so a browser should `fetch` the
+file and show it through a blob URL (for image and video previews too) rather than linking to it
+directly. Responses are always `attachment`, with `X-Content-Type-Options: nosniff`, a sandboxing
+`Content-Security-Policy` and `Cache-Control: private, no-store`. A file is only reachable through
+its own room's URL and with a session for that room, so a file id alone grants nothing.
+
+Files from expired rooms stay on disk until the cleanup worker (M4) exists, but they can't be
+downloaded once the room has expired.
 
 ### Message history
 
@@ -135,6 +170,7 @@ The server replies with `ready`, then streams events.
 | server → client | `message.new` | `message`, `client_id` (echoes the sender's, so it can match its pending message) |
 | server → client | `participant.joined` | `participant` |
 | server → client | `participant.left` | `participant_id` |
+| server → client | `file.ready` | `file` (see Files above) |
 | server → client | `presence` | `participant_id`, `online` (sent when someone's first tab opens or last tab closes) |
 | server → client | `room.expired` | sent just before the server closes every socket in the room |
 | server → client | `error` | `code`, `detail`, `client_id`. The connection stays open. |
