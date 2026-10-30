@@ -13,7 +13,17 @@ export class ApiError extends Error {
   }
 }
 
-const API = "/api";
+// Empty in development (the Vite proxy serves /api on the page's origin). In production the API is
+// hosted separately, so VITE_API_URL holds its origin, e.g. https://api.example.com.
+const API_ORIGIN: string = import.meta.env.VITE_API_URL ?? "";
+const API = `${API_ORIGIN}/api`;
+
+/** The WebSocket URL for a room, on the API's host (or the page's host when proxied). */
+export function roomSocketUrl(roomId: string): string {
+  const base = new URL(API_ORIGIN || window.location.origin);
+  const protocol = base.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${base.host}/api/rooms/${roomId}/ws`;
+}
 
 /** FastAPI returns `detail` as a string for our own errors and as a list for validation errors. */
 function messageFrom(body: unknown, fallback: string): string {

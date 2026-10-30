@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ApiError, getFiles, getMessages, leaveRoom, uploadFile } from "../api/client";
+import { ApiError, getFiles, getMessages, leaveRoom, roomSocketUrl, uploadFile } from "../api/client";
 import type { FileOut, MemberOut, MessageOut, ReplyOut, RoomSession, ServerFrame } from "../api/types";
 import { makeId, parseServerTime } from "../lib/format";
 
@@ -35,11 +35,6 @@ function endReasonForStatus(status: number): EndReason | null {
   if (status === 410) return "expired";
   if (status === 401 || status === 403 || status === 404) return "invalid";
   return null;
-}
-
-function socketUrl(roomId: string): string {
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${window.location.host}/api/rooms/${roomId}/ws`;
 }
 
 function appendUnique(list: ChatMessage[], incoming: MessageOut[]): ChatMessage[] {
@@ -201,7 +196,7 @@ export function useRoom(session: RoomSession) {
 
     const connect = () => {
       if (disposed || endedRef.current) return;
-      const ws = new WebSocket(socketUrl(roomId));
+      const ws = new WebSocket(roomSocketUrl(roomId));
       socketRef.current = ws;
 
       ws.onopen = () => {

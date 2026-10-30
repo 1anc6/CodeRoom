@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import SecretStr
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -46,6 +46,15 @@ class Settings(BaseSettings):
     # stray (so uploads still in progress are left alone).
     reconcile_interval_seconds: float = 3600
     orphan_grace_seconds: int = 3600
+
+    @field_validator("database_url")
+    @classmethod
+    def _use_asyncpg(cls, url: str) -> str:
+        """Hosts hand out plain postgres:// URLs; the app needs the asyncpg driver named in the scheme."""
+        for scheme in ("postgres://", "postgresql://"):
+            if url.startswith(scheme):
+                return "postgresql+asyncpg://" + url.removeprefix(scheme)
+        return url
 
 
 @lru_cache

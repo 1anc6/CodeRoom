@@ -1,0 +1,28 @@
+# Render Blueprint for the API and its database. The frontend is hosted on Vercel (frontend/vercel.json).
+services:
+  - type: web
+    name: coderoom-api
+    runtime: docker
+    rootDir: backend
+    plan: free
+    healthCheckPath: /api/health
+    # The realtime hub and rate limits live in memory, so this must stay a single instance.
+    numInstances: 1
+    envVars:
+      - key: CODEROOM_DATABASE_URL
+        fromDatabase:
+          name: coderoom-db
+          property: connectionString
+      - key: CODEROOM_CODE_HASH_KEY
+        generateValue: true
+      - key: CODEROOM_CORS_ORIGINS
+        value: '["https://coderoom-murex.vercel.app"]'
+      # The free plan has no persistent disk, so uploads last only until the instance restarts.
+      - key: CODEROOM_STORAGE_DIR
+        value: /tmp/uploads
+
+databases:
+  - name: coderoom-db
+    plan: free
+    databaseName: coderoom
+    user: coderoom
