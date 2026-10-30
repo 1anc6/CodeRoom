@@ -22,3 +22,7 @@ Thumbs.db
 
 # Design-skill working files
 .taste-skill/
+
+# Vercel CLI
+.vercel
+.env*.local

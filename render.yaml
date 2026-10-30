@@ -16,7 +16,7 @@ services:
       - key: CODEROOM_CODE_HASH_KEY
         generateValue: true
       - key: CODEROOM_CORS_ORIGINS
-        value: '["https://coderoom-murex.vercel.app"]'
+        value: '["https://coderom.vercel.app"]'
       # The free plan has no persistent disk, so uploads last only until the instance restarts.
       - key: CODEROOM_STORAGE_DIR
         value: /tmp/uploads
