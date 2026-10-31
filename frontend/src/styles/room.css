@@ -202,7 +202,8 @@
   border-bottom: 1px solid var(--line);
 }
 
-.room__tabs button {
+.room__tabs button,
+.room__sidetabs button {
   position: relative;
   flex: 1;
   height: 44px;
@@ -216,15 +217,18 @@
   transition: color var(--dur);
 }
 
-.room__tabs button:hover {
+.room__tabs button:hover,
+.room__sidetabs button:hover {
   color: var(--ink);
 }
 
-.room__tabs button[aria-pressed="true"] {
+.room__tabs button[aria-pressed="true"],
+.room__sidetabs button[aria-pressed="true"] {
   color: var(--ink);
 }
 
-.room__tabs button[aria-pressed="true"]::after {
+.room__tabs button[aria-pressed="true"]::after,
+.room__sidetabs button[aria-pressed="true"]::after {
   content: "";
   position: absolute;
   right: 16px;
@@ -236,7 +240,8 @@
 }
 
 /* Inside the tab, so the ring isn't clipped or doubled against its neighbour. */
-.room__tabs button:focus-visible {
+.room__tabs button:focus-visible,
+.room__sidetabs button:focus-visible {
   outline-offset: -4px;
 }
 
@@ -245,7 +250,7 @@
 /* The conversation takes the width; one panel beside it holds the people and the files. */
 .room__body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-columns: minmax(0, 1fr) 320px;
   min-height: 0;
   border-top: 1px solid var(--line);
 }
@@ -284,28 +289,51 @@
   flex-direction: column;
 }
 
-/* People keep their natural height (scrolling past a few dozen); the files take the rest. */
-.room__side-people {
+/* Tabs along the top of the side panel; the chosen one fills the rest of its height. */
+.room__sidetabs {
+  display: flex;
   flex: none;
-  max-height: 45%;
-  min-height: 0;
   border-bottom: 1px solid var(--line);
 }
 
+.room__sidetabs .tabular {
+  margin-left: 4px;
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+
+.room__side-people,
 .room__files {
   flex: 1;
   min-height: 0;
 }
 
-.room__side-people {
-  display: flex;
-  flex-direction: column;
+.room[data-side="people"] .room__files,
+.room[data-side="files"] .room__side-people {
+  display: none;
 }
 
-.room__side-people > .panel {
-  flex: 1 1 auto;
-  height: auto;
-  min-height: 0;
+/* The tabs already name each section, so the headings are kept for screen readers only. */
+.room__side .panel__title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Collapsed: the conversation takes the whole width. */
+.room[data-side-open="false"] .room__body {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.room[data-side-open="false"] .room__side {
+  display: none;
+}
+
+.room-header__side.is-on {
+  color: var(--ink);
 }
 
 /* ---------- Panels ---------- */
@@ -1553,10 +1581,32 @@ button.file__name:hover {
     display: none;
   }
 
-  .room__side-people {
-    flex: 1;
-    max-height: none;
-    border: 0;
+  /* The phone has its own tabs under the header, so the side panel's tabs and the switch go. */
+  .room__sidetabs,
+  .room-header__side {
+    display: none;
+  }
+
+  .room[data-side-open="false"] .room__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .room[data-panel="people"] .room__side,
+  .room[data-panel="files"] .room__side {
+    display: flex;
+  }
+
+  .room[data-panel="people"] .room__side-people,
+  .room[data-panel="files"] .room__files {
+    display: block;
+  }
+
+  .room__side .panel__title {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
   }
 
   .row__avatar {

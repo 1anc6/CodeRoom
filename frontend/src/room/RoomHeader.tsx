@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { RoomSession } from "../api/types";
 import { Wordmark } from "../components/Brand";
-import { Door, Lock } from "../components/Icons";
+import { Door, Lock, PanelRight } from "../components/Icons";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { formatClock, formatRemaining, parseServerTime } from "../lib/format";
 import { CopyCode } from "./CopyCode";
@@ -21,13 +21,16 @@ interface RoomHeaderProps {
   onLeave: () => Promise<void>;
   /** Leaving would close the room, since nobody else is in it. */
   lastOne: boolean;
+  /** Whether the people-and-files panel is showing, and the switch for it (computers only). */
+  sideOpen: boolean;
+  onToggleSide: () => void;
 }
 
 /**
  * One bar: the room's code as the page title, its connection and closing time, and the way out.
  * The time left runs along its bottom edge.
  */
-export function RoomHeader({ session, connection, onLeave, lastOne }: RoomHeaderProps) {
+export function RoomHeader({ session, connection, onLeave, lastOne, sideOpen, onToggleSide }: RoomHeaderProps) {
   const now = useNow(1000);
   const created = parseServerTime(session.room.created_at);
   const expires = parseServerTime(session.room.expires_at);
@@ -83,6 +86,16 @@ export function RoomHeader({ session, connection, onLeave, lastOne }: RoomHeader
       </p>
 
       <div className="room-header__end">
+        <button
+          type="button"
+          className={`icon-btn icon-btn--small room-header__side${sideOpen ? " is-on" : ""}`}
+          onClick={onToggleSide}
+          aria-pressed={sideOpen}
+          aria-label={sideOpen ? "Hide people and files" : "Show people and files"}
+          title={sideOpen ? "Hide people and files" : "Show people and files"}
+        >
+          <PanelRight size={18} />
+        </button>
         <ThemeToggle className="icon-btn--small" />
         {confirming ? (
           <span className="leave-confirm">

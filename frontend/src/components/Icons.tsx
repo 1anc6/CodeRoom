@@ -123,6 +123,13 @@ export const Clock = (p: IconProps) => (
   </Icon>
 );
 
+export const PanelRight = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
+    <path d="M14.5 4.5v15" />
+  </Icon>
+);
+
 export const LinkIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />

@@ -13,6 +13,17 @@ import { useRoom, type EndReason } from "../room/useRoom";
 import { clearSession, loadSession } from "../session";
 
 type Panel = "chat" | "files" | "people";
+type Side = Exclude<Panel, "chat">;
+
+const SIDE_KEY = "coderoom.side";
+
+function readSideOpen(): boolean {
+  try {
+    return localStorage.getItem(SIDE_KEY) !== "closed";
+  } catch {
+    return true;
+  }
+}
 
 export function RoomPage() {
   const { roomId } = useParams();
@@ -35,6 +46,8 @@ function Room({ session }: { session: RoomSession }) {
   // The session with the room as it stands now (the host may have extended or locked it).
   const live = useMemo(() => ({ ...session, room: room.room }), [session, room.room]);
   const [panel, setPanel] = useState<Panel>("chat");
+  const [side, setSide] = useState<Side>("people");
+  const [sideOpen, setSideOpen] = useState(readSideOpen);
   const [preview, setPreview] = useState<FileOut | null>(null);
   const [unread, setUnread] = useState(0);
   const seenCount = useRef(0);
@@ -53,6 +66,14 @@ function Room({ session }: { session: RoomSession }) {
   const showError = room.flash;
 
   useEffect(() => () => releaseRoomUrls(session.room.id), [session.room.id]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDE_KEY, sideOpen ? "open" : "closed");
+    } catch {
+      // Only a convenience: the panel just opens again next time.
+    }
+  }, [sideOpen]);
 
   // Count other people's messages that arrive while this tab is in the background.
   useEffect(() => {
@@ -86,12 +107,14 @@ function Room({ session }: { session: RoomSession }) {
   ];
 
   return (
-    <div className="room" data-panel={panel}>
+    <div className="room" data-panel={panel} data-side={side} data-side-open={sideOpen}>
       <RoomHeader
         session={live}
         connection={room.connection}
         onLeave={room.leave}
         lastOne={room.lastOne}
+        sideOpen={sideOpen}
+        onToggleSide={() => setSideOpen((open) => !open)}
       />
 
       <nav className="room__tabs" aria-label="Room sections">
@@ -123,8 +146,16 @@ function Room({ session }: { session: RoomSession }) {
           />
         </div>
 
-        {/* One panel beside the conversation: who's here above, what's been shared below. */}
+        {/* One panel beside the conversation, with who's here and what's been shared on tabs. */}
         <div className="room__side">
+          <nav className="room__sidetabs" aria-label="Side panel">
+            <button type="button" aria-pressed={side === "people"} onClick={() => setSide("people")}>
+              People <span className="tabular">{peopleHere}</span>
+            </button>
+            <button type="button" aria-pressed={side === "files"} onClick={() => setSide("files")}>
+              Files <span className="tabular">{room.files.length}</span>
+            </button>
+          </nav>
           <div className="room__side-people">{people}</div>
           <div className="room__files">
             <Files

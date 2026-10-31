@@ -15,6 +15,7 @@
   --accent-ink: #84683f;    /* derived: brass dark enough for text, 4.6:1 on the ground */
   --ink: #423e3b;           /* Dark Charcoal */
   --ink-strong: #2a2724;    /* derived: text set on brass */
+  --ink-hover: #2a2724;     /* derived: an ink button under the pointer, one step further from the ground */
   --ink-soft: #635a51;      /* derived: secondary text and placeholders, 6.1:1 on the ground, 5:1 on surface-2 */
   --on-ink: #f6f4f2;
   --line: rgba(66, 62, 59, 0.13); /* derived: hairline borders between panels and rows */
@@ -58,6 +59,7 @@
     --accent: #c4a878;
     --accent-ink: #d6bd8f;
     --ink: #ece7e1;
+    --ink-hover: #fbf8f5;
     --ink-soft: #b3a99d;
     --on-ink: #1c1a18;
     --line: rgba(236, 231, 225, 0.12);
@@ -80,6 +82,7 @@
   --accent: #c4a878;
   --accent-ink: #d6bd8f;
   --ink: #ece7e1;
+  --ink-hover: #fbf8f5;
   --ink-soft: #b3a99d;
   --on-ink: #1c1a18;
   --line: rgba(236, 231, 225, 0.12);
@@ -209,7 +212,7 @@ video {
 }
 
 .btn:hover {
-  background: var(--ink-strong);
+  background: var(--ink-hover);
 }
 
 .btn:active {
