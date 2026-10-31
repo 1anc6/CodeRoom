@@ -49,7 +49,6 @@ function Room({ session }: { session: RoomSession }) {
       session={live}
       members={room.members}
       isHost={room.isHost}
-      onPresent={() => setPresenting(true)}
       onRemove={room.removeMember}
       onExtend={room.extend}
       onLock={room.setLocked}

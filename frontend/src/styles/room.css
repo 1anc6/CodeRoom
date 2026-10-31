@@ -1,6 +1,7 @@
 /*
-  The room: an app screen. Ink for chrome, brass only for the time left. One 16px gutter;
-  panels are cards with a hairline border (radius 8), controls are radius 6.
+  The room: an app screen. Ink for chrome, brass only for the time left. On a computer the three
+  regions sit edge to edge like a desktop chat app, split by hairlines, with the conversation on
+  its doodle wallpaper. Controls are radius 6.
 */
 
 .room {
@@ -249,24 +250,46 @@
 
 .room__body {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr) 340px;
-  gap: var(--gutter);
-  padding: var(--gutter);
+  grid-template-columns: 280px minmax(0, 1fr) 320px;
   min-height: 0;
+  border-top: 1px solid var(--line);
 }
 
 .room__people,
 .room__chat,
 .room__side {
   min-height: 0;
-  border: 1px solid var(--line);
-  border-radius: var(--panel-radius);
   background: var(--card);
   overflow: hidden;
 }
 
+.room__people {
+  border-right: 1px solid var(--line);
+}
+
+.room__side {
+  border-left: 1px solid var(--line);
+}
+
 .room__chat {
-  background: var(--surface);
+  position: relative;
+  isolation: isolate;
+  background: var(--wall);
+}
+
+/* The wallpaper: a tile of line doodles, used as a mask so each theme colours it. Computers only;
+   on a phone the conversation keeps its plain ground. */
+@media (min-width: 821px) {
+  .room__chat::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: var(--doodle);
+    -webkit-mask: url("/doodles.svg") 0 0 / 304px 304px repeat;
+    mask: url("/doodles.svg") 0 0 / 304px 304px repeat;
+    pointer-events: none;
+  }
 }
 
 .room__side {
@@ -291,14 +314,14 @@
   flex-direction: column;
   gap: var(--gutter);
   height: 100%;
-  padding: var(--gutter);
+  padding: 20px;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
 .panel__head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
@@ -339,11 +362,18 @@
 }
 
 .person__name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-weight: 500;
+  font-size: 0.9375rem;
+}
+
+.person__label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 500;
-  font-size: 0.9375rem;
 }
 
 .person__you {
@@ -359,59 +389,39 @@
   font-size: 0.8125rem;
 }
 
-.invite {
+/* The panel's foot: the host's two controls side by side, then the invite link. */
+.people__foot {
+  display: grid;
+  gap: 8px;
   margin-top: auto;
-  padding: var(--gutter);
-  border: 1px solid var(--line);
-  border-radius: var(--panel-radius);
-  background: var(--bg);
+  padding-top: var(--gutter);
 }
 
-.invite__title {
-  font-size: 1.125rem;
-  line-height: 1.3;
-}
-
-.invite__text {
-  margin: 4px 0 12px;
-  color: var(--ink-soft);
-  font-size: 0.875rem;
-}
-
-/* Wraps onto a second row for a long chosen code, rather than squeezing its characters. */
-/* One row up to six characters; a longer chosen code wraps into rows of six. */
-.invite__code {
-  display: grid;
-  grid-template-columns: repeat(var(--cols, 5), minmax(0, 1fr));
-  gap: 6px;
-}
-
-.invite__code span {
-  display: grid;
-  place-items: center;
-  height: 46px;
-  border: 1px solid var(--line);
-  border-radius: var(--control-radius);
-  background: var(--card);
-  font-weight: 600;
-  font-size: 1.375rem;
-}
-
-.invite__actions {
+.people__tools {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  margin-top: 12px;
+  gap: 8px;
 }
 
-.invite__copy {
-  width: 100%;
-  height: 40px;
+.people__tools .btn {
+  gap: 8px;
+  padding: 0 12px;
 }
 
-.invite__present {
+.people__tools .btn.is-on {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+
+.people__invite {
   width: 100%;
-  margin-top: 6px;
+  height: 38px;
+}
+
+.people__note {
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+  text-align: center;
 }
 
 /* ---------- Chat ---------- */
@@ -461,9 +471,13 @@
   text-align: center;
 }
 
+/* Set on a card of its own, so it reads cleanly over the wallpaper. */
 .chat__empty {
   margin: auto;
-  max-width: 36ch;
+  max-width: 40ch;
+  padding: 24px 28px;
+  border-radius: 12px;
+  background: var(--card);
   text-align: center;
 }
 
@@ -1048,29 +1062,23 @@ button.quote:hover {
 
 /* ---------- Files ---------- */
 
+/* How much of the room's space is used: one quiet line at the foot of the panel. */
 .storage {
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--panel-radius);
-  background: var(--bg);
+  margin-top: auto;
+  padding-top: var(--gutter);
 }
 
 .storage__text {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  font-size: 0.875rem;
-  font-weight: 600;
-}
-
-.storage__soft {
   color: var(--ink-soft);
-  font-weight: 400;
+  font-size: 0.8125rem;
 }
 
 .storage__bar {
-  height: 4px;
-  margin-top: 10px;
+  height: 3px;
+  margin-top: 8px;
   border-radius: 999px;
   background: var(--surface-2);
   overflow: hidden;
@@ -1087,15 +1095,9 @@ button.quote:hover {
 }
 
 .files__add {
-  width: 100%;
-  min-height: 44px;
-  font-size: var(--step-small);
-  border: 1px solid var(--line);
-  background: var(--card);
-}
-
-.files__add:hover {
-  background: var(--surface);
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 12px;
 }
 
 .uploads,
@@ -1605,8 +1607,6 @@ button.file__name:hover {
     background: var(--card);
   }
 
-  .storage,
-  .invite,
   .upload {
     background: var(--card);
   }
@@ -1625,16 +1625,13 @@ button.file__name:hover {
 /* ---------- Host tools, typing, presenting ---------- */
 
 .person__host {
-  margin-left: 8px;
-  padding: 1px 7px;
+  flex: none;
+  padding: 1px 8px;
   border-radius: 999px;
-  background: var(--surface-2);
+  background: var(--surface);
   color: var(--ink-soft);
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  vertical-align: 1px;
 }
 
 .person__remove {
@@ -1677,36 +1674,6 @@ button.file__name:hover {
   padding: 0 10px;
   background: var(--danger-bg);
   color: var(--danger);
-}
-
-.host-tools {
-  display: grid;
-  gap: 6px;
-  margin-top: 16px;
-  padding: var(--gutter);
-  border: 1px solid var(--line);
-  border-radius: var(--panel-radius);
-}
-
-.host-tools__title {
-  margin-bottom: 4px;
-  font-size: 1.125rem;
-  line-height: 1.3;
-}
-
-.host-tools__btn {
-  justify-content: flex-start;
-  width: 100%;
-}
-
-.host-tools__btn.is-on {
-  background: var(--ink);
-  color: var(--on-ink);
-}
-
-.host-tools__note {
-  color: var(--ink-soft);
-  font-size: 0.8125rem;
 }
 
 .files__all {

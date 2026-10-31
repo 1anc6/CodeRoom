@@ -48,7 +48,15 @@ export function Files({
         <h2 id="files-title" className="panel__title">
           Files
         </h2>
-        <span className="panel__count tabular">{files.length}</span>
+        <button
+          type="button"
+          className="btn btn--small btn--quiet files__add"
+          onClick={() => inputRef.current?.click()}
+          disabled={disabled}
+        >
+          <Paperclip size={16} />
+          Add files
+        </button>
       </div>
 
       {files.length > 1 && (
@@ -67,27 +75,6 @@ export function Files({
         </button>
       )}
 
-      <div className="storage">
-        <div className="storage__text">
-          <span className="tabular">{formatBytes(used)} of 100 MB</span>
-          <span className="storage__soft">25 MB a file</span>
-        </div>
-        <div
-          className="storage__bar"
-          role="progressbar"
-          aria-label="Room storage used"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.round(fraction * 100)}
-        >
-          <span style={{ transform: `scaleX(${fraction})` }} />
-        </div>
-      </div>
-
-      <button type="button" className="btn btn--quiet files__add" onClick={() => inputRef.current?.click()} disabled={disabled}>
-        <Paperclip size={18} />
-        Add files
-      </button>
       <input
         ref={inputRef}
         type="file"
@@ -129,7 +116,7 @@ export function Files({
 
       {files.length === 0 && uploads.length === 0 ? (
         <p className="panel__empty">
-          Nothing shared yet. Photos, PDFs, documents, text and video up to 25 MB can go here, or drop them on the chat.
+          Nothing shared yet. Drop photos, PDFs, documents or video on the chat, or add them here.
         </p>
       ) : (
         <ul className="files__list">
@@ -140,6 +127,23 @@ export function Files({
           ))}
         </ul>
       )}
+
+      <div className="storage">
+        <div className="storage__text">
+          <span className="tabular">{formatBytes(used)} of 100 MB used</span>
+          <span>25 MB a file</span>
+        </div>
+        <div
+          className="storage__bar"
+          role="progressbar"
+          aria-label="Room storage used"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(fraction * 100)}
+        >
+          <span style={{ transform: `scaleX(${fraction})` }} />
+        </div>
+      </div>
     </section>
   );
 }

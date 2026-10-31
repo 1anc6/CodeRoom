@@ -1,6 +1,6 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState } from "react";
 import type { MemberOut, RoomSession } from "../api/types";
-import { Clock, Close, Lock, QrCode as QrIcon, Unlock } from "../components/Icons";
+import { Clock, Close, Lock, Unlock } from "../components/Icons";
 import { initials, tintFor } from "../lib/format";
 import { CopyCode } from "./CopyCode";
 import { joinLink } from "./QrCode";
@@ -9,7 +9,6 @@ interface PeopleProps {
   session: RoomSession;
   members: MemberOut[];
   isHost: boolean;
-  onPresent: () => void;
   onRemove: (participantId: string) => Promise<void>;
   onExtend: (minutes: number) => Promise<void>;
   onLock: (locked: boolean) => Promise<void>;
@@ -17,7 +16,7 @@ interface PeopleProps {
 
 const EXTEND_MINUTES = 30;
 
-export function People({ session, members, isHost, onPresent, onRemove, onExtend, onLock }: PeopleProps) {
+export function People({ session, members, isHost, onRemove, onExtend, onLock }: PeopleProps) {
   const meId = session.participant.id;
   const locked = session.room.locked;
   // Me first, then whoever is here now, then the rest by name.
@@ -49,7 +48,7 @@ export function People({ session, members, isHost, onPresent, onRemove, onExtend
     <section className="panel people" aria-labelledby="people-title">
       <div className="panel__head">
         <h2 id="people-title" className="panel__title">
-          In the room
+          People
         </h2>
         <span className="panel__count tabular">
           {here} here{members.length > here ? `, ${members.length - here} away` : ""}
@@ -66,9 +65,11 @@ export function People({ session, members, isHost, onPresent, onRemove, onExtend
                 {initials(m.display_name)}
               </span>
               <span className="person__name">
-                {m.display_name}
-                {m.id === meId && <span className="person__you"> (you)</span>}
-                {m.is_host && <span className="person__host">host</span>}
+                <span className="person__label">
+                  {m.display_name}
+                  {m.id === meId && <span className="person__you"> (you)</span>}
+                </span>
+                {m.is_host && <span className="person__host">Host</span>}
               </span>
               <span className="person__state">
                 <span className={`dot${m.online ? " dot--on" : ""}`} aria-hidden="true" />
@@ -94,64 +95,42 @@ export function People({ session, members, isHost, onPresent, onRemove, onExtend
         </ul>
       )}
 
-      {isHost && (
-        <div className="host-tools" aria-label="Room controls" role="group">
-          <h3 className="host-tools__title">Your room</h3>
-          <button
-            type="button"
-            className="btn btn--small btn--quiet host-tools__btn"
-            onClick={() => run("extend", () => onExtend(EXTEND_MINUTES))}
-            disabled={busy !== null}
-          >
-            <Clock size={16} />
-            Add {EXTEND_MINUTES} minutes
-          </button>
-          <button
-            type="button"
-            className={`btn btn--small btn--quiet host-tools__btn${locked ? " is-on" : ""}`}
-            aria-pressed={locked}
-            onClick={() => run("lock", () => onLock(!locked))}
-            disabled={busy !== null}
-          >
-            {locked ? <Lock size={16} /> : <Unlock size={16} />}
-            {locked ? "Locked to newcomers" : "Lock the room"}
-          </button>
-          <p className="host-tools__note">
-            {locked ? "Nobody new can join, even with the code." : "Lock it once everyone's in."}
-          </p>
-        </div>
-      )}
-
-      <div className="invite">
-        <h3 className="invite__title">Bring someone in</h3>
-        <p className="invite__text">
-          {locked
-            ? "The room is locked, so nobody new can join until it's unlocked."
-            : "Read out this code, or share the link. Anyone who has it can join until the room closes."}
-        </p>
-        <div
-          className="invite__code tabular"
-          style={{ "--cols": Math.min(session.code.length, 6) } as CSSProperties}
-          aria-hidden="true"
-        >
-          {session.code.split("").map((d, i) => (
-            <span key={i}>{d}</span>
-          ))}
-        </div>
-        <div className="invite__actions">
-          <CopyCode code={session.code} className="invite__copy" label="Code" />
+      <div className="people__foot">
+        {isHost && (
+          <div className="people__tools" role="group" aria-label="Room controls">
+            <button
+              type="button"
+              className="btn btn--small btn--quiet"
+              onClick={() => run("extend", () => onExtend(EXTEND_MINUTES))}
+              disabled={busy !== null}
+              title={`Add ${EXTEND_MINUTES} minutes before the room closes`}
+            >
+              <Clock size={16} />+{EXTEND_MINUTES} min
+            </button>
+            <button
+              type="button"
+              className={`btn btn--small btn--quiet${locked ? " is-on" : ""}`}
+              aria-pressed={locked}
+              onClick={() => run("lock", () => onLock(!locked))}
+              disabled={busy !== null}
+              title={locked ? "Let new people join with the code again" : "Stop anyone new joining, even with the code"}
+            >
+              {locked ? <Lock size={16} /> : <Unlock size={16} />}
+              {locked ? "Locked" : "Lock"}
+            </button>
+          </div>
+        )}
+        {locked ? (
+          <p className="people__note">Locked, so nobody new can join.</p>
+        ) : (
           <CopyCode
             code={session.code}
             value={joinLink(session.code)}
-            className="invite__copy"
-            label="Link"
+            className="people__invite"
+            label="Copy invite link"
             ariaLabel="Copy the join link"
           />
-        </div>
-        <button type="button" className="btn btn--small btn--quiet invite__present" onClick={onPresent}>
-          <QrIcon size={16} />
-          Show code and QR
-        </button>
+        )}
       </div>
     </section>
   );

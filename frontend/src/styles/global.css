@@ -7,6 +7,8 @@
   --card: #fcfbfa;          /* derived: one step lighter than the ground, for the product's panels */
   --surface: #ede8e2;       /* derived: one step toward Warm Grey */
   --surface-2: #e3dcd3;     /* derived: two steps */
+  --wall: #ece6de;          /* derived: the chat's ground, between surface and surface-2 */
+  --doodle: rgba(66, 62, 59, 0.085); /* derived: the wallpaper's line doodles, drawn on --wall */
   --field: #d3c9bd;         /* Warm Grey */
   --tan: #ab9e8e;           /* Muted Tan: dots, tracks, never body text */
   --accent: #b4986b;        /* Antique Brass */
@@ -49,6 +51,8 @@
     --card: #24211f;
     --surface: #2d2a27;
     --surface-2: #37332f;
+    --wall: #1a1816;
+    --doodle: rgba(236, 231, 225, 0.055);
     --field: #4a443e;
     --tan: #8a7e70;
     --accent: #c4a878;
@@ -69,6 +73,8 @@
   --card: #24211f;
   --surface: #2d2a27;
   --surface-2: #37332f;
+  --wall: #1a1816;
+  --doodle: rgba(236, 231, 225, 0.055);
   --field: #4a443e;
   --tan: #8a7e70;
   --accent: #c4a878;
