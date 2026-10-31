@@ -13,7 +13,7 @@ export interface ParticipantOut {
   id: string;
   display_name: string;
   joined_at: string;
-  /** Whoever opened the room: they can extend it, lock it and ask people to leave. */
+  /** Whoever opened the room, or whoever it passed to when they left: they can extend it, lock it and ask people to leave. */
   is_host: boolean;
 }
 
@@ -83,6 +83,7 @@ export type ServerFrame =
   | { type: "message.edited"; message: MessageOut }
   | { type: "participant.joined"; participant: ParticipantOut }
   | { type: "participant.left"; participant_id: string }
+  | { type: "host.changed"; participant: ParticipantOut }
   | { type: "presence"; participant_id: string; online: boolean }
   | { type: "file.ready"; file: FileOut }
   | { type: "room.updated"; room: RoomOut }

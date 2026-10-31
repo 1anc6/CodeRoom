@@ -194,9 +194,30 @@ async def get_room(me: CurrentParticipant, request: Request, session: SessionDep
     )
 
 
+async def _pick_new_host(session: AsyncSession, hub: RoomHub, room_id: uuid.UUID) -> Participant | None:
+    """Make someone still in the room its host if nobody is: whoever has been here longest, connected first."""
+    remaining = list(
+        await session.scalars(
+            select(Participant)
+            .where(Participant.room_id == room_id, Participant.left_at.is_(None))
+            .order_by(Participant.joined_at)
+        )
+    )
+    if not remaining or any(p.is_host for p in remaining):
+        return None
+    online = hub.online_participant_ids(room_id)
+    successor = next((p for p in remaining if p.id in online), remaining[0])
+    successor.is_host = True
+    return successor
+
+
 @router.delete("/{room_id}/leave", status_code=status.HTTP_204_NO_CONTENT)
 async def leave_room(me: CurrentParticipant, request: Request, session: SessionDep) -> Response:
+    hub = _hub(request)
     me.left_at = utcnow()
+    await session.flush()
+    # Without a host nobody could extend the room, unlock it or remove anyone, so the role passes on.
+    successor = await _pick_new_host(session, hub, me.room_id)
     others = await session.scalar(
         select(func.count())
         .select_from(Participant)
@@ -204,9 +225,11 @@ async def leave_room(me: CurrentParticipant, request: Request, session: SessionD
     )
     await session.commit()
 
-    hub = _hub(request)
     # The session token is now revoked, so close any sockets it opened (other tabs included).
     await hub.close_participant(me.room_id, me.id, CLOSE_LEFT, "Left the room")
+    if successor is not None:
+        participant = ParticipantOut.model_validate(successor).model_dump(mode="json")
+        await hub.broadcast(me.room_id, event("host.changed", participant=participant))
     await hub.broadcast(me.room_id, event("participant.left", participant_id=str(me.id)))
 
     # The last one out closes the room, and its messages and files are deleted now.
@@ -221,7 +244,7 @@ async def leave_room(me: CurrentParticipant, request: Request, session: SessionD
 
 def _require_host(me: Participant) -> None:
     if not me.is_host:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Only whoever opened the room can do that")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Only the room's host can do that")
 
 
 async def _room_updated(request: Request, room: Room) -> RoomOut:

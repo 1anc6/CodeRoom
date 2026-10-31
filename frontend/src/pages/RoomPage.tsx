@@ -209,7 +209,7 @@ const ENDED: Record<EndReason, { title: string; body: (code: string) => string }
   },
   removed: {
     title: "You've been asked to leave.",
-    body: () => "Whoever opened the room removed you from it. If you think that was a mistake, ask them for the code again.",
+    body: () => "The room's host removed you from it. If you think that was a mistake, ask them for the code again.",
   },
   invalid: {
     title: "This room isn't open to this tab.",

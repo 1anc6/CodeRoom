@@ -509,6 +509,25 @@ def test_typing_reaches_everyone_else_but_is_not_echoed(live_client):
         assert bob_ws.receive_json()["type"] == "pong"
 
 
+def test_the_host_role_passes_to_someone_connected_when_the_host_leaves(live_client):
+    alice = create(live_client)
+    # Carol has been in the room longer, but she isn't connected, so Bob gets the role.
+    carol = join(live_client, alice["code"], name="Carol")
+    bob = join(live_client, alice["code"], name="Bob")
+    with connect(live_client, bob) as (bob_ws, _):
+        response = live_client.delete(f"/api/rooms/{alice['room']['id']}/leave", headers=auth(alice["token"]))
+        assert response.status_code == 204
+
+        changed = bob_ws.receive_json()
+        assert changed["type"] == "host.changed"
+        assert changed["participant"]["id"] == bob["participant"]["id"]
+        assert changed["participant"]["is_host"] is True
+        assert bob_ws.receive_json() == {"type": "participant.left", "participant_id": alice["participant"]["id"]}
+
+    details = live_client.get(f"/api/rooms/{alice['room']['id']}", headers=auth(carol["token"])).json()
+    assert {m["display_name"]: m["is_host"] for m in details["participants"]} == {"Carol": False, "Bob": True}
+
+
 def test_removed_member_is_disconnected_and_the_room_is_told(live_client):
     alice, bob = pair(live_client)
     with connect(live_client, alice) as (alice_ws, _), connect(live_client, bob) as (bob_ws, _):

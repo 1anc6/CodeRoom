@@ -100,7 +100,8 @@ class Participant(Base):
     last_seen_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
     # Set when the participant leaves; their session token stops working from then on.
     left_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
-    # Whoever opened the room. Only they can extend it, lock it or ask someone to leave.
+    # Whoever opened the room, or whoever the role passed to when the host left.
+    # Only they can extend it, lock it or ask someone to leave.
     is_host: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
 
     room: Mapped[Room] = relationship(back_populates="participants")

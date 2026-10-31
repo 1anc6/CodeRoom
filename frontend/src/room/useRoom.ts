@@ -214,6 +214,16 @@ export function useRoom(session: RoomSession) {
         case "participant.left":
           setMembers((list) => list.filter((m) => m.id !== frame.participant_id));
           break;
+        case "host.changed": {
+          const next = frame.participant;
+          setMembers((list) => list.map((m) => ({ ...m, is_host: m.id === next.id })));
+          flash(
+            next.id === session.participant.id
+              ? "The host left, so you're the host now. You can add time, lock the room and remove people."
+              : `The host left. ${next.display_name} is the host now.`,
+          );
+          break;
+        }
         case "presence":
           setMembers((list) => list.map((m) => (m.id === frame.participant_id ? { ...m, online: frame.online } : m)));
           break;
@@ -233,7 +243,7 @@ export function useRoom(session: RoomSession) {
           break;
       }
     },
-    [catchUp, end, flash, applyRoom],
+    [catchUp, end, flash, applyRoom, session.participant.id],
   );
 
   // Initial files, then the live connection (which loads message history once it's ready).
@@ -561,7 +571,8 @@ export function useRoom(session: RoomSession) {
 
   return {
     room,
-    isHost: Boolean(session.participant.is_host),
+    // The role can pass on when the host leaves, so the live member list decides over the saved session.
+    isHost: members.find((m) => m.id === session.participant.id)?.is_host ?? Boolean(session.participant.is_host),
     typingNames,
     notifyTyping,
     extend,

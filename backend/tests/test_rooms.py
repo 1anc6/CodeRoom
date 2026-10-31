@@ -370,3 +370,29 @@ async def test_cannot_remove_someone_from_another_room(client):
         f"/api/rooms/{alice['room']['id']}/participants/{carol['participant']['id']}", headers=auth(alice["token"])
     )
     assert response.status_code == 404
+
+
+async def test_when_the_host_leaves_the_longest_here_becomes_host(client):
+    alice = await create_room(client)
+    bob = (await join_room(client, alice["code"], name="Bob")).json()
+    carol = (await join_room(client, alice["code"], name="Carol")).json()
+    room_id = alice["room"]["id"]
+
+    assert (await client.delete(f"/api/rooms/{room_id}/leave", headers=auth(alice["token"]))).status_code == 204
+
+    details = await client.get(f"/api/rooms/{room_id}", headers=auth(carol["token"]))
+    assert {p["display_name"]: p["is_host"] for p in details.json()["participants"]} == {"Bob": True, "Carol": False}
+    locked = await client.post(f"/api/rooms/{room_id}/lock", json={"locked": True}, headers=auth(bob["token"]))
+    assert locked.status_code == 200
+
+
+async def test_a_guest_leaving_does_not_change_the_host(client):
+    alice = await create_room(client)
+    bob = (await join_room(client, alice["code"], name="Bob")).json()
+    await join_room(client, alice["code"], name="Carol")
+    room_id = alice["room"]["id"]
+
+    await client.delete(f"/api/rooms/{room_id}/leave", headers=auth(bob["token"]))
+
+    details = await client.get(f"/api/rooms/{room_id}", headers=auth(alice["token"]))
+    assert {p["display_name"]: p["is_host"] for p in details.json()["participants"]} == {"Alice": True, "Carol": False}
