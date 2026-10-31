@@ -190,6 +190,13 @@ export function useRoom(session: RoomSession) {
           });
           break;
         }
+        case "message.edited": {
+          const { message } = frame;
+          setMessages((list) =>
+            list.map((m) => (m.id === message.id ? { ...m, content: message.content, edited_at: message.edited_at } : m)),
+          );
+          break;
+        }
         case "error":
           if (frame.client_id) {
             setMessages((list) =>
@@ -372,6 +379,7 @@ export function useRoom(session: RoomSession) {
           display_name: session.participant.display_name,
           content,
           created_at: new Date().toISOString(),
+          edited_at: null,
           reply_to: replyTo,
           state: sent ? "pending" : "failed",
           error: sent ? undefined : "Not connected. Tap to retry.",
@@ -395,6 +403,21 @@ export function useRoom(session: RoomSession) {
       );
     },
     [transmit],
+  );
+
+  /** Sends new words for one of this person's own messages. The room hears it back as message.edited. */
+  const editMessage = useCallback(
+    (messageId: string, raw: string) => {
+      const content = raw.trim();
+      if (!content || content.length > MAX_MESSAGE_LENGTH) return;
+      const ws = socketRef.current;
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        flash("Not connected. Your edit wasn't saved.");
+        return;
+      }
+      ws.send(JSON.stringify({ type: "message.edit", message_id: messageId, content }));
+    },
+    [flash],
   );
 
   const loadOlder = useCallback(async () => {
@@ -559,6 +582,7 @@ export function useRoom(session: RoomSession) {
     flash,
     dismissNotice: () => setNotice(null),
     sendMessage,
+    editMessage,
     retryMessage,
     loadOlder,
     uploadFiles,

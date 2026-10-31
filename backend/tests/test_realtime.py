@@ -309,6 +309,102 @@ def test_ping_gets_pong(live_client):
         assert ws.receive_json() == {"type": "pong"}
 
 
+# --- Editing --------------------------------------------------------------------------
+
+
+def edit(ws: WebSocketTestSession, message_id: str, content: str) -> None:
+    ws.send_json({"type": "message.edit", "message_id": message_id, "content": content})
+
+
+def test_edit_is_stored_and_broadcast_to_everyone(live_client):
+    alice, bob = pair(live_client)
+    with connect(live_client, alice) as (alice_ws, _), connect(live_client, bob) as (bob_ws, _):
+        alice_ws.receive_json()  # Bob comes online
+        send(alice_ws, "Lunch at noon?")
+        original = alice_ws.receive_json()["message"]
+        bob_ws.receive_json()
+        assert original["edited_at"] is None
+
+        edit(alice_ws, original["id"], "Lunch at one?")
+        for ws in (alice_ws, bob_ws):
+            received = ws.receive_json()
+            assert received["type"] == "message.edited"
+            assert received["message"]["id"] == original["id"]
+            assert received["message"]["content"] == "Lunch at one?"
+            assert received["message"]["edited_at"] is not None
+
+    history = live_client.get(f"/api/rooms/{alice['room']['id']}/messages", headers=auth(bob["token"])).json()
+    [message] = history["messages"]
+    assert message["content"] == "Lunch at one?"
+    assert message["created_at"] == original["created_at"]
+    assert message["edited_at"] is not None
+
+
+def test_only_the_author_can_edit(live_client):
+    alice, bob = pair(live_client)
+    with connect(live_client, alice) as (alice_ws, _), connect(live_client, bob) as (bob_ws, _):
+        alice_ws.receive_json()  # Bob comes online
+        send(alice_ws, "Mine")
+        original = alice_ws.receive_json()["message"]
+        bob_ws.receive_json()
+
+        edit(bob_ws, original["id"], "Not yours")
+        error = bob_ws.receive_json()
+        assert (error["type"], error["code"], error["client_id"]) == ("error", "invalid_edit", None)
+
+    history = live_client.get(f"/api/rooms/{alice['room']['id']}/messages", headers=auth(alice["token"])).json()
+    assert [(m["content"], m["edited_at"]) for m in history["messages"]] == [("Mine", None)]
+
+
+def test_cannot_edit_a_message_from_another_room(live_client):
+    alice = create(live_client)
+    carol = create(live_client, name="Carol")
+    with connect(live_client, carol) as (ws, _):
+        send(ws, "Carol's secret")
+        secret = ws.receive_json()["message"]
+    with connect(live_client, alice) as (ws, _):
+        edit(ws, secret["id"], "Alice was here")
+        assert ws.receive_json()["code"] == "invalid_edit"
+
+
+def test_saving_unchanged_text_is_not_broadcast(live_client):
+    alice = create(live_client)
+    with connect(live_client, alice) as (ws, _):
+        send(ws, "Same")
+        original = ws.receive_json()["message"]
+        edit(ws, original["id"], "Same")
+        ws.send_json({"type": "ping"})
+        assert ws.receive_json() == {"type": "pong"}
+
+
+@pytest.mark.parametrize(
+    ("frame", "error_code"),
+    [
+        ({"message_id": "{msg}", "content": "   "}, "invalid_message"),
+        ({"message_id": "{msg}", "content": 42}, "invalid_message"),
+        ({"message_id": "{msg}", "content": "x" * 10001}, "message_too_long"),
+        ({"message_id": "not-a-uuid", "content": "Changed"}, "invalid_edit"),
+        ({"content": "Changed"}, "invalid_edit"),
+        ({"message_id": str(uuid.uuid4()), "content": "Changed"}, "invalid_edit"),
+    ],
+)
+def test_invalid_edits_get_an_error_and_keep_the_connection(live_client, frame: dict[str, Any], error_code):
+    alice = create(live_client)
+    with connect(live_client, alice) as (ws, _):
+        send(ws, "Original")
+        original = ws.receive_json()["message"]
+
+        body = {key: original["id"] if value == "{msg}" else value for key, value in frame.items()}
+        ws.send_json({"type": "message.edit", **body})
+        assert ws.receive_json()["code"] == error_code
+
+        # Still usable afterwards, and the message is unchanged.
+        ws.send_json({"type": "ping"})
+        assert ws.receive_json() == {"type": "pong"}
+    history = live_client.get(f"/api/rooms/{alice['room']['id']}/messages", headers=auth(alice["token"])).json()
+    assert [m["content"] for m in history["messages"]] == ["Original"]
+
+
 # --- Room events ----------------------------------------------------------------------
 
 

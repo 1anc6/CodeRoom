@@ -51,6 +51,8 @@ export interface MessageOut {
   display_name: string;
   content: string;
   created_at: string;
+  /** Set once the author has changed the text. */
+  edited_at: string | null;
   reply_to: ReplyOut | null;
 }
 
@@ -78,6 +80,7 @@ export interface FileList {
 export type ServerFrame =
   | { type: "ready"; me: ParticipantOut; participants: MemberOut[] }
   | { type: "message.new"; message: MessageOut; client_id: string | null }
+  | { type: "message.edited"; message: MessageOut }
   | { type: "participant.joined"; participant: ParticipantOut }
   | { type: "participant.left"; participant_id: string }
   | { type: "presence"; participant_id: string; online: boolean }

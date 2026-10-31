@@ -137,10 +137,12 @@ function Room({ session }: { session: RoomSession }) {
             loadingOlder={room.loadingOlder}
             onLoadOlder={room.loadOlder}
             onSend={room.sendMessage}
+            onEdit={room.editMessage}
             onRetry={room.retryMessage}
             onUpload={room.uploadFiles}
             onPreview={setPreview}
             onError={showError}
+            onNotice={room.flash}
             typingNames={room.typingNames}
             onTyping={room.notifyTyping}
           />

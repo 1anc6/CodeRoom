@@ -1,10 +1,22 @@
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
 import type { FileOut, ReplyOut, RoomSession } from "../api/types";
-import { ArrowUp, Close, Paperclip, Retry } from "../components/Icons";
+import { ArrowUp, Check, Close, Copy, Paperclip, Pencil, Reply, Retry } from "../components/Icons";
 import { formatClock, initials, parseServerTime, tintFor } from "../lib/format";
 import { ACCEPT } from "./Files";
 import { FileRow } from "./FileRow";
 import { MediaMessage } from "./MediaMessage";
+import { MessageMenu, type MenuAction } from "./MessageMenu";
 import { Quote } from "./Quote";
 import { ReplyRow } from "./ReplyRow";
 import { isPreviewable } from "./fileUrls";
@@ -27,6 +39,26 @@ function withLinks(text: string): ReactNode[] {
       <Fragment key={i}>{part}</Fragment>
     ),
   );
+}
+
+/** Copies text with the Clipboard API, or with the older selection method where that API is off (plain http on a LAN). */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    // Fall through to the older method.
+  }
+  const field = document.createElement("textarea");
+  field.value = text;
+  field.setAttribute("readonly", "");
+  field.style.position = "fixed";
+  field.style.opacity = "0";
+  document.body.appendChild(field);
+  field.select();
+  const copied = document.execCommand("copy");
+  field.remove();
+  return copied;
 }
 
 function senderOf(item: Item): string {
@@ -55,10 +87,12 @@ interface ChatProps {
   loadingOlder: boolean;
   onLoadOlder: () => Promise<void>;
   onSend: (text: string, replyTo: ReplyOut | null) => void;
+  onEdit: (messageId: string, text: string) => void;
   onRetry: (clientId: string) => void;
   onUpload: (files: File[]) => void;
   onPreview: (file: FileOut) => void;
   onError: (message: string) => void;
+  onNotice: (message: string) => void;
   /** Names of the others typing right now. */
   typingNames: string[];
   onTyping: () => void;
@@ -86,6 +120,8 @@ export function Chat({
   typingNames,
   onTyping,
   onError,
+  onNotice,
+  onEdit,
 }: ChatProps) {
   const meId = session.participant.id;
   const roomId = session.room.id;
@@ -93,6 +129,10 @@ export function Chat({
 
   const [draft, setDraft] = useState("");
   const [replyTo, setReplyTo] = useState<ReplyOut | null>(null);
+  // While set, the composer saves a change to this message instead of sending a new one.
+  const [editing, setEditing] = useState<ChatMessage | null>(null);
+  // The message whose actions are open, and the bubble they belong to.
+  const [menu, setMenu] = useState<{ message: ChatMessage; anchor: HTMLElement } | null>(null);
   const [dragging, setDragging] = useState(false);
   const [unseen, setUnseen] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
@@ -159,6 +199,7 @@ export function Chat({
   function onScroll() {
     const list = listRef.current;
     if (!list) return;
+    setMenu(null);
     atBottomRef.current = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
     if (atBottomRef.current && unseen) setUnseen(0);
   }
@@ -180,9 +221,58 @@ export function Chat({
 
   useEffect(autosize, [draft]);
 
+  // Editing starts with the cursor at the end of the text, ready to change it.
+  useEffect(() => {
+    const el = textRef.current;
+    if (editing && el) {
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    }
+  }, [editing]);
+
+  const closeMenu = useCallback(() => setMenu(null), []);
+
   function startReply(reply: ReplyOut) {
+    if (editing) cancelEdit();
     setReplyTo(reply);
     textRef.current?.focus();
+  }
+
+  function startEdit(message: ChatMessage) {
+    setReplyTo(null);
+    setEditing(message);
+    setDraft(message.content);
+  }
+
+  function cancelEdit() {
+    setEditing(null);
+    setDraft("");
+    textRef.current?.focus();
+  }
+
+  /** A tap on a message opens its actions, as in chat apps. Links, buttons and selected text keep their own use. */
+  function openMenu(event: MouseEvent<HTMLDivElement>, message: ChatMessage) {
+    if ((event.target as HTMLElement).closest("a, button") || window.getSelection()?.toString()) return;
+    const anchor = event.currentTarget;
+    setMenu((open) => (open?.message.id === message.id ? null : { message, anchor }));
+  }
+
+  async function copyMessage(message: ChatMessage) {
+    if (await copyText(message.content)) onNotice("Copied to clipboard.");
+    else onError("Couldn't copy from here. Select the text and copy it instead.");
+  }
+
+  function actionsFor(message: ChatMessage): MenuAction[] {
+    const actions: MenuAction[] = [];
+    if (!message.state) {
+      actions.push({ label: "Reply", icon: <Reply size={18} />, run: () => startReply(quoteMessage(message)) });
+    }
+    actions.push({ label: "Copy", icon: <Copy size={18} />, run: () => void copyMessage(message) });
+    // Only the author can change their words, and only once the message has really been sent.
+    if (!message.state && message.participant_id === meId) {
+      actions.push({ label: "Edit", icon: <Pencil size={18} />, run: () => startEdit(message) });
+    }
+    return actions;
   }
 
   /** Brings the quoted original into view and marks it for a moment, as chat apps do. */
@@ -202,10 +292,16 @@ export function Chat({
   function send() {
     const text = draft.trim();
     if (!text || !live || text.length > MAX_MESSAGE_LENGTH) return;
-    onSend(text, replyTo);
+    if (editing) {
+      // Saving an edit changes a message in place, so the view stays where it is.
+      if (text !== editing.content) onEdit(editing.id, text);
+      setEditing(null);
+    } else {
+      onSend(text, replyTo);
+      setReplyTo(null);
+      atBottomRef.current = true;
+    }
     setDraft("");
-    setReplyTo(null);
-    atBottomRef.current = true;
     textRef.current?.focus();
   }
 
@@ -328,6 +424,7 @@ export function Chat({
 
             const m = item.message;
             const time = m.state === "pending" ? "Sending…" : m.state === "failed" ? "Not sent" : formatClock(m.created_at);
+            const stamp = m.edited_at ? `Edited ${time}` : time;
             return (
               <ReplyRow
                 key={m.clientId ?? m.id}
@@ -339,17 +436,20 @@ export function Chat({
               >
                 {avatar}
                 <div className="msg">
-                  <div className={`bubble${m.reply_to ? " has-quote" : ""}`}>
+                  <div
+                    className={`bubble${m.reply_to ? " has-quote" : ""}`}
+                    onClick={(event) => openMenu(event, m)}
+                  >
                     {!mine && startsGroup && <span className="bubble__name">{name}</span>}
                     {m.reply_to && <Quote reply={m.reply_to} {...quoteProps} onJump={jumpTo} />}
                     <p className="bubble__text">
                       {withLinks(m.content)}
                       {/* Holds room on the last line for the time, which sits in the corner. */}
                       <span className="bubble__spacer" aria-hidden="true">
-                        {time}
+                        {stamp}
                       </span>
                     </p>
-                    <span className="bubble__time tabular">{time}</span>
+                    <span className="bubble__time tabular">{stamp}</span>
                   </div>
                   {m.state === "failed" && m.clientId && (
                     <button type="button" className="msg__retry" onClick={() => onRetry(m.clientId!)}>
@@ -384,6 +484,17 @@ export function Chat({
           send();
         }}
       >
+        {editing && (
+          <div className="composer__reply composer__edit">
+            <span className="composer__edit-label">
+              <Pencil size={16} />
+              Editing your message
+            </span>
+            <button type="button" className="icon-btn icon-btn--small" onClick={cancelEdit} aria-label="Cancel edit" title="Cancel edit">
+              <Close size={16} />
+            </button>
+          </div>
+        )}
         {replyTo && (
           <div className="composer__reply">
             <Quote reply={replyTo} {...quoteProps} />
@@ -428,7 +539,7 @@ export function Chat({
           />
           <div className="composer__field">
             <label htmlFor="composer-text" className="visually-hidden">
-              {replyTo ? `Reply to ${replyTo.participant_id === meId ? "yourself" : replyTo.display_name}` : "Message"}
+              {editing ? "Edit message" : replyTo ? `Reply to ${replyTo.participant_id === meId ? "yourself" : replyTo.display_name}` : "Message"}
             </label>
             <textarea
               id="composer-text"
@@ -436,13 +547,16 @@ export function Chat({
               className="composer__text"
               rows={1}
               value={draft}
-              placeholder={live ? (replyTo ? "Write a reply" : "Write to the room") : "Reconnecting, hold on…"}
+              placeholder={live ? (editing ? "Edit your message" : replyTo ? "Write a reply" : "Write to the room") : "Reconnecting, hold on…"}
               onChange={(e) => {
                 setDraft(e.target.value);
                 if (e.target.value.trim()) onTyping();
               }}
               onKeyDown={(e) => {
-                if (e.key === "Escape" && replyTo) {
+                if (e.key === "Escape" && editing) {
+                  e.preventDefault();
+                  cancelEdit();
+                } else if (e.key === "Escape" && replyTo) {
                   e.preventDefault();
                   setReplyTo(null);
                 } else if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -468,12 +582,21 @@ export function Chat({
             type="submit"
             className="composer__send"
             disabled={!live || !draft.trim() || remaining < 0}
-            aria-label={replyTo ? "Send reply" : "Send message"}
+            aria-label={editing ? "Save edit" : replyTo ? "Send reply" : "Send message"}
           >
-            <ArrowUp size={20} />
+            {editing ? <Check size={20} /> : <ArrowUp size={20} />}
           </button>
         </div>
       </form>
+
+      {menu && (
+        <MessageMenu
+          anchor={menu.anchor}
+          mine={menu.message.participant_id === meId}
+          actions={actionsFor(menu.message)}
+          onClose={closeMenu}
+        />
+      )}
 
       {dragging && (
         <div className="chat__drop" aria-hidden="true">

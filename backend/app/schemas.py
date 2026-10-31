@@ -105,6 +105,8 @@ class MessageOut(BaseModel):
     display_name: str
     content: str
     created_at: datetime
+    # Set once the author has edited the text.
+    edited_at: datetime | None = None
     reply_to: ReplyOut | None = None
 
 

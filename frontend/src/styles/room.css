@@ -974,6 +974,24 @@ button.quote:hover {
   margin: 0;
 }
 
+/* While a message's text is being changed: it reads like a quote, with a label instead. */
+.composer__edit {
+  padding: 5px 6px 5px 9px;
+  border-left: 3px solid var(--tan);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+.composer__edit-label {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
 .composer__row {
   display: flex;
   align-items: flex-end;
@@ -1298,6 +1316,41 @@ button.file__name:hover {
 .file__meta {
   color: var(--ink-soft);
   font-size: 0.8125rem;
+}
+
+/* ---------- Message actions: what a tap on a message opens (it floats, so it casts a shadow) ---------- */
+
+.msg-menu {
+  position: fixed;
+  z-index: 60;
+  display: grid;
+  min-width: 168px;
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: 0 18px 40px -18px rgba(42, 39, 36, 0.6); /* taste-skill-ignore: floating menu */
+  animation: fade-in 160ms var(--ease-out);
+}
+
+.msg-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.9375rem;
+  text-align: left;
+}
+
+.msg-menu__item:hover,
+.msg-menu__item:focus-visible {
+  background: var(--surface-2);
+  outline: none;
 }
 
 /* ---------- Toast and preview (these truly float, so they cast a shadow) ---------- */

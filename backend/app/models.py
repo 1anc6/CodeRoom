@@ -114,6 +114,8 @@ class Message(Base):
     participant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("participants.id", ondelete="CASCADE"))
     content: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    # Set when the author edits the text; None means it has never changed since it was sent.
+    edited_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
     deleted_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
     # A reply quotes one earlier message or shared file in the same room (at most one of these).
     reply_to_message_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("messages.id", ondelete="SET NULL"))

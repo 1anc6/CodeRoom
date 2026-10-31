@@ -12,11 +12,12 @@ from typing import Any
 import anyio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.config import Settings
 from app.deps import find_participant, room_is_closed
-from app.messages import current_members, message_out
+from app.messages import current_members, message_out, visible_messages
 from app.models import Message, Participant, RoomFile, utcnow
 from app.realtime import (
     CLOSE_AUTH_TIMEOUT,
@@ -96,24 +97,57 @@ async def _touch_last_seen(websocket: WebSocket, participant_id: uuid.UUID) -> N
             await session.commit()
 
 
-async def _handle_message_send(websocket: WebSocket, conn: Connection, frame: dict[str, Any]) -> None:
+async def _check_content(websocket: WebSocket, content: Any, client_id: str | None) -> bool:
+    """Whether content is storable text. Sends the error and returns False if it isn't."""
     settings = _settings(websocket)
-    client_id = frame.get("client_id")
-    if not (isinstance(client_id, str) and len(client_id) <= _MAX_CLIENT_ID_LENGTH):
-        client_id = None
-
-    content = frame.get("content")
     if not isinstance(content, str) or not content.strip():
         await _send_error(websocket, "invalid_message", "Message must be non-empty text", client_id)
-        return
+        return False
     if len(content) > settings.max_message_length:
         await _send_error(
             websocket, "message_too_long", f"Messages are limited to {settings.max_message_length} characters", client_id
         )
-        return
+        return False
     if "\x00" in content:
         await _send_error(websocket, "invalid_message", "Message contains a null character", client_id)
+        return False
+    return True
+
+
+async def _take_message_slot(websocket: WebSocket, conn: Connection, client_id: str | None) -> bool:
+    """Counts one message or edit against the participant's rate limit. False means it was refused."""
+    limiter = websocket.app.state.message_rate
+    rate_key = str(conn.participant_id)
+    if limiter.is_limited(rate_key):
+        await _send_error(websocket, "rate_limited", "You're sending messages too quickly", client_id)
+        return False
+    limiter.hit(rate_key)
+    return True
+
+
+async def _active_participant(websocket: WebSocket, conn: Connection, session: AsyncSession) -> Participant:
+    """Re-checks access before every write: the participant may have left or the room expired.
+    Closes the connection and raises _Closed if they may not write. A missing participant means
+    the room was already cleaned up, which deletes them."""
+    participant = await session.get(Participant, conn.participant_id, options=[joinedload(Participant.room)])
+    if participant is not None and participant.left_at is not None:
+        await websocket.close(CLOSE_UNAUTHORIZED, "Invalid room session")
+        raise _Closed
+    if participant is None or not participant.room.is_open(utcnow()):
+        await websocket.send_json(event("room.expired"))
+        await websocket.close(CLOSE_ROOM_EXPIRED, "Room expired")
+        raise _Closed
+    return participant
+
+
+async def _handle_message_send(websocket: WebSocket, conn: Connection, frame: dict[str, Any]) -> None:
+    client_id = frame.get("client_id")
+    if not (isinstance(client_id, str) and len(client_id) <= _MAX_CLIENT_ID_LENGTH):
+        client_id = None
+
+    if not await _check_content(websocket, frame.get("content"), client_id):
         return
+    content = frame["content"]
 
     # Optional {"kind": "message" | "file", "id": "<uuid>"}: the message or file this one replies to.
     reply_to = frame.get("reply_to")
@@ -127,25 +161,12 @@ async def _handle_message_send(websocket: WebSocket, conn: Connection, frame: di
             await _send_error(websocket, "invalid_reply", "reply_to must name a message or a file", client_id)
             return
 
-    limiter = websocket.app.state.message_rate
-    rate_key = str(conn.participant_id)
-    if limiter.is_limited(rate_key):
-        await _send_error(websocket, "rate_limited", "You're sending messages too quickly", client_id)
+    if not await _take_message_slot(websocket, conn, client_id):
         return
-    limiter.hit(rate_key)
 
     async with websocket.app.state.sessionmaker() as session:
-        participant = await session.get(Participant, conn.participant_id, options=[joinedload(Participant.room)])
+        participant = await _active_participant(websocket, conn, session)
         now = utcnow()
-        # Re-check access on every message: the participant may have left or the room expired.
-        # A missing participant means the room was already cleaned up, which deletes them.
-        if participant is not None and participant.left_at is not None:
-            await websocket.close(CLOSE_UNAUTHORIZED, "Invalid room session")
-            raise _Closed
-        if participant is None or not participant.room.is_open(now):
-            await websocket.send_json(event("room.expired"))
-            await websocket.close(CLOSE_ROOM_EXPIRED, "Room expired")
-            raise _Closed
 
         quoted_message: Message | None = None
         quoted_file: RoomFile | None = None
@@ -182,6 +203,41 @@ async def _handle_message_send(websocket: WebSocket, conn: Connection, frame: di
     await _hub(websocket).broadcast(conn.room_id, event("message.new", message=payload, client_id=client_id))
 
 
+async def _handle_message_edit(websocket: WebSocket, conn: Connection, frame: dict[str, Any]) -> None:
+    try:
+        message_id = uuid.UUID(frame.get("message_id"))
+    except (TypeError, ValueError, AttributeError):
+        await _send_error(websocket, "invalid_edit", "message_id must name a message")
+        return
+
+    if not await _check_content(websocket, frame.get("content"), None):
+        return
+    content = frame["content"]
+
+    if not await _take_message_slot(websocket, conn, None):
+        return
+
+    async with websocket.app.state.sessionmaker() as session:
+        await _active_participant(websocket, conn, session)
+        message = await session.scalar(visible_messages(conn.room_id).where(Message.id == message_id))
+        if message is None:
+            await _send_error(websocket, "invalid_edit", "That message isn't in this room any more")
+            return
+        # Only the author can change their words, the way chat apps let you.
+        if message.participant_id != conn.participant_id:
+            await _send_error(websocket, "invalid_edit", "You can only edit your own messages")
+            return
+        if message.content == content:
+            return  # Nothing changed, so there is nothing to tell the room.
+
+        message.content = content
+        message.edited_at = utcnow()
+        await session.commit()
+        payload = message_out(message).model_dump(mode="json")
+
+    await _hub(websocket).broadcast(conn.room_id, event("message.edited", message=payload))
+
+
 async def _handle_frame(websocket: WebSocket, conn: Connection, raw: str) -> None:
     # Allow for JSON escaping of a maximum-length message, plus the envelope.
     if len(raw) > _settings(websocket).max_message_length * 6 + 1024:
@@ -199,6 +255,8 @@ async def _handle_frame(websocket: WebSocket, conn: Connection, raw: str) -> Non
     match frame.get("type"):
         case "message.send":
             await _handle_message_send(websocket, conn, frame)
+        case "message.edit":
+            await _handle_message_edit(websocket, conn, frame)
         case "typing":
             # Nothing is stored; the others just see "… is typing" for a few seconds. Clients send
             # this at most every few seconds while someone types.

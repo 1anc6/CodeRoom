@@ -187,7 +187,8 @@ a minute (see below).
 - `before=<message id>`: older messages, for scrolling back. `has_more` says whether to keep going.
 - `after=<message id>`: newer messages, for catching up after a reconnect.
 
-Each message is `{id, participant_id, display_name, content, created_at}`. Content is plain text and
+Each message is `{id, participant_id, display_name, content, created_at, edited_at}`, where `edited_at` is
+`null` until its author changes the text. Content is plain text and
 must be rendered as text, never as HTML.
 
 ### WebSocket protocol
@@ -205,10 +206,12 @@ The server replies with `ready`, then streams events.
 |---|---|---|
 | client → server | `auth` | `token` |
 | client → server | `message.send` | `content` (1–10000 chars), optional `client_id` (≤ 64 chars), optional `reply_to` (`{"kind": "message" \| "file", "id": ...}` in the same room) |
+| client → server | `message.edit` | `message_id` (one of your own messages in this room), `content` (1–10000 chars). Saving unchanged text does nothing. |
 | client → server | `typing` | sent at most every few seconds while someone types; nothing is stored |
 | client → server | `ping` | |
 | server → client | `ready` | `me`, `participants` (each with `online`) |
 | server → client | `message.new` | `message`, `client_id` (echoes the sender's, so it can match its pending message) |
+| server → client | `message.edited` | `message` (the whole message with its new `content` and `edited_at`), sent to everyone including the author |
 | server → client | `participant.joined` | `participant` |
 | server → client | `participant.left` | `participant_id` |
 | server → client | `file.ready` | `file` (see Files above) |
@@ -219,8 +222,9 @@ The server replies with `ready`, then streams events.
 | server → client | `error` | `code`, `detail`, `client_id`. The connection stays open. |
 | server → client | `pong` | |
 
-Error codes: `invalid_message`, `invalid_reply`, `message_too_long`, `rate_limited` (20 messages per
-10 seconds), `invalid_json`, `unsupported_frame`, `frame_too_large`, `unknown_type`.
+Error codes: `invalid_message`, `invalid_reply`, `invalid_edit` (not your message, or not in this room),
+`message_too_long`, `rate_limited` (20 messages per 10 seconds, shared by sends and edits), `invalid_json`,
+`unsupported_frame`, `frame_too_large`, `unknown_type`.
 
 A message that replies to something carries `reply_to`: `kind`, `id`, `participant_id`,
 `display_name`, `text` (the first 200 characters of the quoted message, or the file's name) and

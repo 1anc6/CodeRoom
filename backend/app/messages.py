@@ -45,6 +45,7 @@ def message_out(message: Message) -> MessageOut:
         display_name=message.participant.display_name,
         content=message.content,
         created_at=message.created_at,
+        edited_at=message.edited_at,
         reply_to=reply_out(message),
     )
 

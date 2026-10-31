@@ -77,6 +77,13 @@ export const Reply = (p: IconProps) => (
   </Icon>
 );
 
+export const Pencil = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 20h4L18.5 9.5l-4-4L4 16z" />
+    <path d="M13.5 6.5l4 4" />
+  </Icon>
+);
+
 export const Play = (p: IconProps) => (
   <Icon {...p}>
     <path d="M8 5.5v13l10.5-6.5L8 5.5z" fill="currentColor" />
