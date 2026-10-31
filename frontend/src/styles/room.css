@@ -197,14 +197,12 @@
 
 /* ---------- Tabs: underline tabs on a hairline ---------- */
 
-.room__tabs,
-.room__sidetabs {
+.room__tabs {
   display: none;
   border-bottom: 1px solid var(--line);
 }
 
-.room__tabs button,
-.room__sidetabs button {
+.room__tabs button {
   position: relative;
   flex: 1;
   height: 44px;
@@ -218,18 +216,15 @@
   transition: color var(--dur);
 }
 
-.room__tabs button:hover,
-.room__sidetabs button:hover {
+.room__tabs button:hover {
   color: var(--ink);
 }
 
-.room__tabs button[aria-pressed="true"],
-.room__sidetabs button[aria-pressed="true"] {
+.room__tabs button[aria-pressed="true"] {
   color: var(--ink);
 }
 
-.room__tabs button[aria-pressed="true"]::after,
-.room__sidetabs button[aria-pressed="true"]::after {
+.room__tabs button[aria-pressed="true"]::after {
   content: "";
   position: absolute;
   right: 16px;
@@ -241,30 +236,25 @@
 }
 
 /* Inside the tab, so the ring isn't clipped or doubled against its neighbour. */
-.room__tabs button:focus-visible,
-.room__sidetabs button:focus-visible {
+.room__tabs button:focus-visible {
   outline-offset: -4px;
 }
 
 /* ---------- Body ---------- */
 
+/* The conversation takes the width; one panel beside it holds the people and the files. */
 .room__body {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr) 300px;
   min-height: 0;
   border-top: 1px solid var(--line);
 }
 
-.room__people,
 .room__chat,
 .room__side {
   min-height: 0;
   background: var(--card);
   overflow: hidden;
-}
-
-.room__people {
-  border-right: 1px solid var(--line);
 }
 
 .room__side {
@@ -277,19 +267,16 @@
   background: var(--wall);
 }
 
-/* The wallpaper: a tile of line doodles, used as a mask so each theme colours it. Computers only;
-   on a phone the conversation keeps its plain ground. */
-@media (min-width: 821px) {
-  .room__chat::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    background: var(--doodle);
-    -webkit-mask: url("/doodles.svg") 0 0 / 304px 304px repeat;
-    mask: url("/doodles.svg") 0 0 / 304px 304px repeat;
-    pointer-events: none;
-  }
+/* The wallpaper: a tile of line doodles, used as a mask so each theme colours it. */
+.room__chat::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--doodle);
+  -webkit-mask: url("/doodles.svg") 0 0 / 420px 420px repeat;
+  mask: url("/doodles.svg") 0 0 / 420px 420px repeat;
+  pointer-events: none;
 }
 
 .room__side {
@@ -297,14 +284,28 @@
   flex-direction: column;
 }
 
-.room__files,
+/* People keep their natural height (scrolling past a few dozen); the files take the rest. */
 .room__side-people {
+  flex: none;
+  max-height: 45%;
+  min-height: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.room__files {
   flex: 1;
   min-height: 0;
 }
 
 .room__side-people {
-  display: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.room__side-people > .panel {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
 }
 
 /* ---------- Panels ---------- */
@@ -314,7 +315,7 @@
   flex-direction: column;
   gap: var(--gutter);
   height: 100%;
-  padding: 20px;
+  padding: 16px 20px;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -327,7 +328,7 @@
 }
 
 .panel__title {
-  font-size: 1.125rem;
+  font-size: 1rem;
   line-height: 1.3;
 }
 
@@ -361,6 +362,12 @@
   animation: msg-in 280ms var(--ease-out);
 }
 
+/* The host sees a remove button on everyone else; its column is kept on their own row too, so the
+   "here" labels line up. */
+.people__list--host .person {
+  grid-template-columns: 32px minmax(0, 1fr) auto 28px;
+}
+
 .person__name {
   display: flex;
   align-items: center;
@@ -389,39 +396,40 @@
   font-size: 0.8125rem;
 }
 
-/* The panel's foot: the host's two controls side by side, then the invite link. */
+/* The section's foot: the host's two controls and the invite link, in one row. */
 .people__foot {
-  display: grid;
-  gap: 8px;
-  margin-top: auto;
-  padding-top: var(--gutter);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
-.people__tools {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+.people__foot .btn {
+  flex: 1 1 0;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 10px;
+  white-space: nowrap;
 }
 
-.people__tools .btn {
-  gap: 8px;
-  padding: 0 12px;
-}
-
-.people__tools .btn.is-on {
+.people__foot .btn.is-on {
   background: var(--ink);
   color: var(--on-ink);
 }
 
 .people__invite {
-  width: 100%;
-  height: 38px;
+  height: auto;
+  border: 0;
+  background: var(--surface);
+}
+
+.people__invite:hover {
+  background: var(--surface-2);
 }
 
 .people__note {
+  flex-basis: 100%;
   color: var(--ink-soft);
   font-size: 0.8125rem;
-  text-align: center;
 }
 
 /* ---------- Chat ---------- */
@@ -648,7 +656,7 @@
 .bubble__name {
   display: block;
   margin-bottom: 2px;
-  color: var(--ink-strong);
+  color: var(--ink);
   font-size: 0.8125rem;
   font-weight: 600;
 }
@@ -824,7 +832,7 @@ button.quote:hover {
 
 .shared__who {
   margin-bottom: 4px;
-  color: var(--ink-strong);
+  color: var(--ink);
   font-size: 0.8125rem;
   font-weight: 600;
 }
@@ -1469,31 +1477,6 @@ button.file__name:hover {
   border-radius: 6px;
 }
 
-/* ---------- Medium: chat plus one switchable side panel ---------- */
-
-@media (max-width: 1240px) {
-  .room__body {
-    grid-template-columns: minmax(0, 1fr) 320px;
-  }
-
-  .room__people {
-    display: none;
-  }
-
-  .room__sidetabs {
-    display: flex;
-    flex: none;
-  }
-
-  .room[data-side="people"] .room__files {
-    display: none;
-  }
-
-  .room[data-side="people"] .room__side-people {
-    display: block;
-  }
-}
-
 /* ---------- Phone: a compact top bar, then one region at a time, edge to edge ---------- */
 
 @media (max-width: 820px) {
@@ -1556,34 +1539,24 @@ button.file__name:hover {
     padding: 0;
   }
 
-  .room__people,
-  .room__chat,
   .room__side {
     border: 0;
-    border-radius: 0;
-  }
-
-  .room__people,
-  .room__side {
     background: var(--bg);
   }
 
-  .room__sidetabs,
-  .room__side-people,
-  .room[data-side="people"] .room__side-people {
-    display: none;
-  }
-
+  /* One region at a time: the chat, or the side panel showing only people or only files. */
   .room[data-panel="chat"] .room__side,
-  .room[data-panel="people"] .room__side,
   .room[data-panel="files"] .room__chat,
-  .room[data-panel="people"] .room__chat {
+  .room[data-panel="people"] .room__chat,
+  .room[data-panel="files"] .room__side-people,
+  .room[data-panel="people"] .room__files {
     display: none;
   }
 
-  .room[data-panel="people"] .room__people,
-  .room[data-panel="files"] .room__files {
-    display: block;
+  .room__side-people {
+    flex: 1;
+    max-height: none;
+    border: 0;
   }
 
   .row__avatar {
@@ -1622,7 +1595,7 @@ button.file__name:hover {
   }
 }
 
-/* ---------- Host tools, typing, presenting ---------- */
+/* ---------- Host tools and typing ---------- */
 
 .person__host {
   flex: none;
@@ -1706,83 +1679,4 @@ button.file__name:hover {
 
 .room-header__end {
   gap: 4px;
-}
-
-/* The code for the back of the room. */
-.present {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  display: grid;
-  grid-template-rows: auto 1fr;
-  padding: 16px clamp(16px, 4vw, 48px) clamp(24px, 5vw, 56px);
-  background: var(--bg);
-  overflow: auto;
-  animation: msg-in 220ms var(--ease-out);
-}
-
-.present__bar {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 8px;
-}
-
-.present__body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: clamp(32px, 6vw, 96px);
-  width: min(1200px, 100%);
-  margin: 0 auto;
-}
-
-.present__eyebrow {
-  color: var(--ink-soft);
-  font-size: 0.875rem;
-  font-weight: 500;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.present__code {
-  margin-top: 8px;
-  font-family: var(--font-text);
-  font-size: clamp(4rem, 13vw, 11rem);
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  line-height: 1;
-  overflow-wrap: anywhere;
-}
-
-.present__how {
-  margin-top: 24px;
-  max-width: 30ch;
-  font-size: clamp(1.125rem, 1rem + 0.6vw, 1.5rem);
-  line-height: 1.35;
-}
-
-.present__when {
-  margin-top: 16px;
-  color: var(--ink-soft);
-}
-
-.present__qr {
-  display: block;
-  width: clamp(200px, 30vw, 380px);
-  height: auto;
-  border-radius: 16px;
-  box-shadow: 0 0 0 1px var(--line);
-}
-
-@media (max-width: 760px) {
-  .present__body {
-    grid-template-columns: 1fr;
-    justify-items: start;
-    align-content: center;
-  }
-
-  .present__qr {
-    width: min(260px, 70vw);
-  }
 }

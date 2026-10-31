@@ -7,7 +7,6 @@ import { Chat } from "../room/Chat";
 import { Files } from "../room/Files";
 import { releaseRoomUrls } from "../room/fileUrls";
 import { People } from "../room/People";
-import { Present } from "../room/Present";
 import { Preview } from "../room/Preview";
 import { RoomHeader } from "../room/RoomHeader";
 import { useRoom, type EndReason } from "../room/useRoom";
@@ -35,15 +34,12 @@ function Room({ session }: { session: RoomSession }) {
   const room = useRoom(session);
   // The session with the room as it stands now (the host may have extended or locked it).
   const live = useMemo(() => ({ ...session, room: room.room }), [session, room.room]);
-  const [presenting, setPresenting] = useState(false);
   const [panel, setPanel] = useState<Panel>("chat");
-  const [side, setSide] = useState<Exclude<Panel, "chat">>("files");
   const [preview, setPreview] = useState<FileOut | null>(null);
   const [unread, setUnread] = useState(0);
   const seenCount = useRef(0);
 
   const closePreview = useCallback(() => setPreview(null), []);
-  const closePresent = useCallback(() => setPresenting(false), []);
   const people = (
     <People
       session={live}
@@ -90,13 +86,12 @@ function Room({ session }: { session: RoomSession }) {
   ];
 
   return (
-    <div className="room" data-panel={panel} data-side={side}>
+    <div className="room" data-panel={panel}>
       <RoomHeader
         session={live}
         connection={room.connection}
         onLeave={room.leave}
         lastOne={room.lastOne}
-        onPresent={() => setPresenting(true)}
       />
 
       <nav className="room__tabs" aria-label="Room sections">
@@ -108,8 +103,6 @@ function Room({ session }: { session: RoomSession }) {
       </nav>
 
       <div className="room__body">
-        <div className="room__people">{people}</div>
-
         <div className="room__chat">
           <Chat
             session={live}
@@ -130,15 +123,9 @@ function Room({ session }: { session: RoomSession }) {
           />
         </div>
 
+        {/* One panel beside the conversation: who's here above, what's been shared below. */}
         <div className="room__side">
-          <nav className="room__sidetabs" aria-label="Side panel">
-            <button type="button" aria-pressed={side === "files"} onClick={() => setSide("files")}>
-              Files
-            </button>
-            <button type="button" aria-pressed={side === "people"} onClick={() => setSide("people")}>
-              People
-            </button>
-          </nav>
+          <div className="room__side-people">{people}</div>
           <div className="room__files">
             <Files
               roomId={session.room.id}
@@ -153,7 +140,6 @@ function Room({ session }: { session: RoomSession }) {
               onDownloadAll={room.downloadAll}
             />
           </div>
-          <div className="room__side-people">{people}</div>
         </div>
       </div>
 
@@ -166,7 +152,6 @@ function Room({ session }: { session: RoomSession }) {
         </div>
       )}
 
-      {presenting && <Present code={session.code} room={room.room} onClose={closePresent} />}
 
       <Preview file={preview} roomId={session.room.id} token={session.token} onClose={closePreview} onError={showError} />
     </div>

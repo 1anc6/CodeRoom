@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { RoomSession } from "../api/types";
 import { Wordmark } from "../components/Brand";
-import { Door, Lock, Present } from "../components/Icons";
+import { Door, Lock } from "../components/Icons";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { formatClock, formatRemaining, parseServerTime } from "../lib/format";
 import { CopyCode } from "./CopyCode";
@@ -21,14 +21,13 @@ interface RoomHeaderProps {
   onLeave: () => Promise<void>;
   /** Leaving would close the room, since nobody else is in it. */
   lastOne: boolean;
-  onPresent: () => void;
 }
 
 /**
  * One bar: the room's code as the page title, its connection and closing time, and the way out.
  * The time left runs along its bottom edge.
  */
-export function RoomHeader({ session, connection, onLeave, lastOne, onPresent }: RoomHeaderProps) {
+export function RoomHeader({ session, connection, onLeave, lastOne }: RoomHeaderProps) {
   const now = useNow(1000);
   const created = parseServerTime(session.room.created_at);
   const expires = parseServerTime(session.room.expires_at);
@@ -63,15 +62,6 @@ export function RoomHeader({ session, connection, onLeave, lastOne, onPresent }:
           <span className="room-header__label">Room</span> {session.code}
         </h1>
         <CopyCode code={session.code} className="room-header__copy" />
-        <button
-          type="button"
-          className="icon-btn icon-btn--small room-header__present"
-          onClick={onPresent}
-          aria-label="Show the code large, with a QR code"
-          title="Show the code large, with a QR code"
-        >
-          <Present size={16} />
-        </button>
       </div>
 
       <p className="room-header__status">

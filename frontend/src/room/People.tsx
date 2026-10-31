@@ -3,7 +3,7 @@ import type { MemberOut, RoomSession } from "../api/types";
 import { Clock, Close, Lock, Unlock } from "../components/Icons";
 import { initials, tintFor } from "../lib/format";
 import { CopyCode } from "./CopyCode";
-import { joinLink } from "./QrCode";
+import { joinLink } from "./joinLink";
 
 interface PeopleProps {
   session: RoomSession;
@@ -58,7 +58,7 @@ export function People({ session, members, isHost, onRemove, onExtend, onLock }:
       {members.length === 0 ? (
         <p className="panel__empty">Finding who's here…</p>
       ) : (
-        <ul className="people__list">
+        <ul className={`people__list${isHost ? " people__list--host" : ""}`}>
           {sorted.map((m) => (
             <li key={m.id} className="person">
               <span className="avatar" style={{ background: tintFor(m.id) }} aria-hidden="true">
@@ -95,9 +95,10 @@ export function People({ session, members, isHost, onRemove, onExtend, onLock }:
         </ul>
       )}
 
-      <div className="people__foot">
+      {/* One row: the host's two controls, then the invite link. */}
+      <div className="people__foot" role="group" aria-label="Room controls">
         {isHost && (
-          <div className="people__tools" role="group" aria-label="Room controls">
+          <>
             <button
               type="button"
               className="btn btn--small btn--quiet"
@@ -118,7 +119,7 @@ export function People({ session, members, isHost, onRemove, onExtend, onLock }:
               {locked ? <Lock size={16} /> : <Unlock size={16} />}
               {locked ? "Locked" : "Lock"}
             </button>
-          </div>
+          </>
         )}
         {locked ? (
           <p className="people__note">Locked, so nobody new can join.</p>
@@ -126,8 +127,8 @@ export function People({ session, members, isHost, onRemove, onExtend, onLock }:
           <CopyCode
             code={session.code}
             value={joinLink(session.code)}
-            className="people__invite"
-            label="Copy invite link"
+            className="btn btn--small btn--quiet people__invite"
+            label={isHost ? "Link" : "Copy invite link"}
             ariaLabel="Copy the join link"
           />
         )}

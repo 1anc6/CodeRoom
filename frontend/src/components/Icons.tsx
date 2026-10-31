@@ -102,21 +102,6 @@ export const Moon = (p: IconProps) => (
   </Icon>
 );
 
-export const QrCode = (p: IconProps) => (
-  <Icon {...p}>
-    <rect x="4" y="4" width="6" height="6" rx="1" />
-    <rect x="14" y="4" width="6" height="6" rx="1" />
-    <rect x="4" y="14" width="6" height="6" rx="1" />
-    <path d="M14 14h2v2M20 14v.01M14 20h.01M17 17h3v3h-3z" />
-  </Icon>
-);
-
-export const Present = (p: IconProps) => (
-  <Icon {...p}>
-    <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
-  </Icon>
-);
-
 export const Lock = (p: IconProps) => (
   <Icon {...p}>
     <rect x="5" y="11" width="14" height="9" rx="2" />
