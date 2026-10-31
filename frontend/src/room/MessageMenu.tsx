@@ -30,11 +30,17 @@ export function MessageMenu({ anchor, mine, actions, onClose }: MessageMenuProps
   useLayoutEffect(() => {
     const menu = ref.current;
     if (!menu) return;
+    const { offsetWidth: width, offsetHeight: height } = menu;
     const box = anchor.getBoundingClientRect();
-    const above = box.top - menu.offsetHeight - EDGE;
-    const top = above >= EDGE ? above : box.bottom + EDGE;
-    const left = mine ? box.right - menu.offsetWidth : box.left;
-    setPlace({ top, left: Math.min(Math.max(left, EDGE), window.innerWidth - menu.offsetWidth - EDGE) });
+    // A long message can run off the top or bottom of the screen, so the menu goes beside the part that shows.
+    const shownTop = Math.max(box.top, EDGE);
+    const shownBottom = Math.min(box.bottom, window.innerHeight - EDGE);
+    const above = shownTop - height - EDGE;
+    const preferred = above >= EDGE ? above : shownBottom + EDGE;
+    // Never past the bottom of the screen: with no clear space beside the message, it sits at the bottom.
+    const top = Math.max(EDGE, Math.min(preferred, window.innerHeight - height - EDGE));
+    const left = mine ? box.right - width : box.left;
+    setPlace({ top, left: Math.min(Math.max(left, EDGE), window.innerWidth - width - EDGE) });
   }, [anchor, mine]);
 
   useEffect(() => {
