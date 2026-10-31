@@ -35,6 +35,8 @@ async def _running_app(settings: Settings) -> AsyncIterator[FastAPI]:
     try:
         yield app
     finally:
+        # The lifespan doesn't run here, so stop the hub's timers by hand.
+        await app.state.hub.shutdown()
         await app.state.engine.dispose()
 
 

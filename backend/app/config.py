@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     message_rate_window_seconds: int = 10
     max_connections_per_participant: int = 5
     ws_auth_timeout_seconds: float = 5
+    # A room nobody is connected to closes, and everything in it is deleted, after this long.
+    # (It closes at once when its last member leaves.)
+    empty_room_grace_seconds: float = 120
 
     # Uploaded files are kept here until the object-storage (R2) adapter is added.
     storage_dir: str = "data/uploads"

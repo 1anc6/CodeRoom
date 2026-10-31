@@ -96,6 +96,7 @@ function Room({ session }: { session: RoomSession }) {
         session={live}
         connection={room.connection}
         onLeave={room.leave}
+        lastOne={room.lastOne}
         onPresent={() => setPresenting(true)}
       />
 
@@ -177,7 +178,12 @@ const ENDED: Record<EndReason, { title: string; body: (code: string) => string }
   expired: {
     title: "This room has closed.",
     body: (code) =>
-      `Its time ran out. Messages and files are being deleted, nobody can get back in, and ${code} is free for a new room.`,
+      `Its time ran out, or everyone left. Messages and files are being deleted, nobody can get back in, and ${code} is free for a new room.`,
+  },
+  closed: {
+    title: "You closed the room.",
+    body: (code) =>
+      `You were the last one in, so it's gone: its messages and files are deleted, and ${code} is free for a new room.`,
   },
   left: {
     title: "You've left the room.",

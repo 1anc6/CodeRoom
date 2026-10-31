@@ -19,7 +19,8 @@ export const MAX_MESSAGE_LENGTH = 10000;
 export const MAX_FILE_BYTES = 25 * 1024 * 1024;
 
 export type Connection = "connecting" | "live" | "reconnecting" | "ended";
-export type EndReason = "left" | "expired" | "invalid" | "removed";
+// "closed": this person was the last one in, so leaving closed the room for good.
+export type EndReason = "left" | "closed" | "expired" | "invalid" | "removed";
 
 export interface ChatMessage extends MessageOut {
   clientId?: string;
@@ -89,6 +90,8 @@ export function useRoom(session: RoomSession) {
   const messagesRef = useRef<ChatMessage[]>([]);
   messagesRef.current = messages;
   const endedRef = useRef(false);
+  // Set while this tab is leaving, so the socket closing first ends the room the same way.
+  const leavingAsRef = useRef<EndReason | null>(null);
 
   const end = useCallback((reason: EndReason) => {
     endedRef.current = true;
@@ -266,7 +269,7 @@ export function useRoom(session: RoomSession) {
         if (event.code === CLOSE_EXPIRED) return end("expired");
         if (event.code === CLOSE_UNAUTHORIZED) return end("invalid");
         if (event.code === CLOSE_REMOVED) return end("removed");
-        if (event.code === CLOSE_LEFT) return end("left");
+        if (event.code === CLOSE_LEFT) return end(leavingAsRef.current ?? "left");
         if (event.code === CLOSE_TOO_MANY) {
           flash("This room is open in too many tabs. Close one and this tab will reconnect.");
           attempts = Math.max(attempts, 4);
@@ -448,18 +451,24 @@ export function useRoom(session: RoomSession) {
     setUploads((list) => list.filter((u) => u.id !== id));
   }, []);
 
+  // Nobody else is a member, so leaving closes the room and deletes everything in it.
+  const lastOne = members.length > 0 && members.every((m) => m.id === session.participant.id);
+
   const leave = useCallback(async () => {
+    const reason = lastOne ? "closed" : "left";
+    leavingAsRef.current = reason;
     try {
       await leaveRoom(roomId, token);
     } catch (error) {
       // An expired or already-revoked session has left in effect.
       if (!(error instanceof ApiError && endReasonForStatus(error.status))) {
+        leavingAsRef.current = null;
         failRequest(error);
         return;
       }
     }
-    end("left");
-  }, [roomId, token, end, failRequest]);
+    end(reason);
+  }, [roomId, token, lastOne, end, failRequest]);
 
   /** Host actions report their own errors: a refusal shouldn't end the room the way a lost session does. */
   const hostAction = useCallback(
@@ -539,6 +548,7 @@ export function useRoom(session: RoomSession) {
     connection,
     endReason,
     members,
+    lastOne,
     messages,
     historyLoaded,
     hasOlder,

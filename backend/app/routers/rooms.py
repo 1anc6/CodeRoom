@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cleanup import close_room
 from app.config import Settings
 from app.deps import CurrentParticipant, SessionDep
 from app.messages import current_members
@@ -125,6 +126,8 @@ async def create_room(body: CreateRoomRequest, request: Request, session: Sessio
             # Another request claimed the same code between our check and insert.
             await session.rollback()
             continue
+        # A room nobody ever opens closes like one everyone has left.
+        _hub(request).watch_empty(room.id)
         return _session_out(room, participant, code, token)
 
     if body.code:
@@ -173,7 +176,10 @@ async def join_room(body: JoinRoomRequest, request: Request, session: SessionDep
     await session.commit()
 
     result = _session_out(room, participant, body.code, token)
-    await _hub(request).broadcast(
+    hub = _hub(request)
+    # If nobody is connected, give the new arrival the full grace period to connect.
+    hub.watch_empty(room.id)
+    await hub.broadcast(
         room.id, event("participant.joined", participant=result.participant.model_dump(mode="json"))
     )
     return result
@@ -191,12 +197,22 @@ async def get_room(me: CurrentParticipant, request: Request, session: SessionDep
 @router.delete("/{room_id}/leave", status_code=status.HTTP_204_NO_CONTENT)
 async def leave_room(me: CurrentParticipant, request: Request, session: SessionDep) -> Response:
     me.left_at = utcnow()
+    others = await session.scalar(
+        select(func.count())
+        .select_from(Participant)
+        .where(Participant.room_id == me.room_id, Participant.id != me.id, Participant.left_at.is_(None))
+    )
     await session.commit()
 
     hub = _hub(request)
     # The session token is now revoked, so close any sockets it opened (other tabs included).
     await hub.close_participant(me.room_id, me.id, CLOSE_LEFT, "Left the room")
     await hub.broadcast(me.room_id, event("participant.left", participant_id=str(me.id)))
+
+    # The last one out closes the room, and its messages and files are deleted now.
+    if others == 0:
+        hub.forget(me.room_id)
+        await close_room(request.app.state.sessionmaker, request.app.state.storage, me.room_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

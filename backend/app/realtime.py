@@ -6,7 +6,9 @@ several app instances would need a shared pub/sub layer so broadcasts reach ever
 
 import asyncio
 import contextlib
+import logging
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -14,6 +16,8 @@ from typing import Any
 from fastapi import WebSocket
 
 from app.models import utcnow
+
+logger = logging.getLogger("coderoom.realtime")
 
 # Close codes sent to clients. 4000-4999 are reserved for applications.
 CLOSE_LEFT = 1000
@@ -41,9 +45,18 @@ class Connection:
 
 
 class RoomHub:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        empty_grace_seconds: float = 120,
+        on_empty: Callable[[uuid.UUID], Awaitable[Any]] | None = None,
+    ) -> None:
         self._rooms: dict[uuid.UUID, set[Connection]] = {}
         self._expiry_tasks: dict[uuid.UUID, asyncio.Task[None]] = {}
+        # A room nobody is connected to is handed to on_empty once it has stayed empty this long.
+        # The wait covers a refresh, a dropped signal or a phone switching apps.
+        self._empty_grace_seconds = empty_grace_seconds
+        self._on_empty = on_empty
+        self._empty_tasks: dict[uuid.UUID, asyncio.Task[None]] = {}
 
     def online_participant_ids(self, room_id: uuid.UUID) -> set[uuid.UUID]:
         return {conn.participant_id for conn in self._rooms.get(room_id, ())}
@@ -55,6 +68,7 @@ class RoomHub:
         """Register a connection. Returns True if its participant just came online."""
         came_online = conn.participant_id not in self.online_participant_ids(conn.room_id)
         self._rooms.setdefault(conn.room_id, set()).add(conn)
+        self._cancel(self._empty_tasks, conn.room_id)
         if conn.room_id not in self._expiry_tasks:
             self._expiry_tasks[conn.room_id] = asyncio.create_task(self._close_when_expired(conn.room_id, expires_at))
         return came_online
@@ -67,16 +81,26 @@ class RoomHub:
         conns.discard(conn)
         if not conns:
             del self._rooms[conn.room_id]
-            task = self._expiry_tasks.pop(conn.room_id, None)
-            if task is not None:
-                task.cancel()
+            self._cancel(self._expiry_tasks, conn.room_id)
+            self.watch_empty(conn.room_id)
         return conn.participant_id not in self.online_participant_ids(conn.room_id)
+
+    def watch_empty(self, room_id: uuid.UUID) -> None:
+        """Close the room if nobody connects to it within the grace period. Called when a room is
+        opened, when its last connection drops, and on someone joining, which restarts the wait so
+        they have the full time to connect."""
+        self._cancel(self._empty_tasks, room_id)
+        if self._on_empty is not None and not self._rooms.get(room_id):
+            self._empty_tasks[room_id] = asyncio.create_task(self._close_when_empty(room_id))
+
+    def forget(self, room_id: uuid.UUID) -> None:
+        """Stop the room's timers, once it has been closed some other way."""
+        self._cancel(self._expiry_tasks, room_id)
+        self._cancel(self._empty_tasks, room_id)
 
     def reschedule(self, room_id: uuid.UUID, expires_at: datetime) -> None:
         """Move the room's closing time, e.g. after the host extends it."""
-        task = self._expiry_tasks.pop(room_id, None)
-        if task is not None:
-            task.cancel()
+        self._cancel(self._expiry_tasks, room_id)
         if self._rooms.get(room_id):
             self._expiry_tasks[room_id] = asyncio.create_task(self._close_when_expired(room_id, expires_at))
 
@@ -96,9 +120,32 @@ class RoomHub:
             await conn.websocket.close(code=code, reason=reason)
 
     async def shutdown(self) -> None:
-        for task in self._expiry_tasks.values():
+        for tasks in (self._expiry_tasks, self._empty_tasks):
+            for task in tasks.values():
+                task.cancel()
+            tasks.clear()
+
+    @staticmethod
+    def _cancel(tasks: dict[uuid.UUID, asyncio.Task[None]], room_id: uuid.UUID) -> None:
+        task = tasks.pop(room_id, None)
+        if task is not None:
             task.cancel()
-        self._expiry_tasks.clear()
+
+    async def _close_when_empty(self, room_id: uuid.UUID) -> None:
+        await asyncio.sleep(self._empty_grace_seconds)
+        # Drop our own entry first so nothing cancels this task while the room is being closed.
+        self._empty_tasks.pop(room_id, None)
+        self._cancel(self._expiry_tasks, room_id)
+        try:
+            await self._on_empty(room_id)
+        except Exception:
+            logger.exception("Could not close empty room %s", room_id)
+            return
+        # Anyone who connected while it was closing is told it has gone.
+        targets = list(self._rooms.get(room_id, ()))
+        await asyncio.gather(*(self._send(conn, event("room.expired")) for conn in targets))
+        await asyncio.gather(*(self.close(conn, CLOSE_ROOM_EXPIRED, "Room expired") for conn in targets))
+        self.forget(room_id)
 
     async def _close_when_expired(self, room_id: uuid.UUID, expires_at: datetime) -> None:
         await asyncio.sleep(max((expires_at - utcnow()).total_seconds(), 0))

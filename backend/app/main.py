@@ -7,9 +7,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.cleanup import CleanupWorker
+from sqlalchemy import select
+
+from app.cleanup import CleanupWorker, close_room
 from app.config import Settings, get_settings
 from app.db import create_engine, create_sessionmaker
+from app.models import Room, RoomStatus
 from app.rate_limit import SlidingWindowLimiter
 from app.realtime import RoomHub
 from app.routers import files, messages, rooms, ws
@@ -43,10 +46,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     engine = create_engine(settings.database_url)
     sessionmaker = create_sessionmaker(engine)
     storage = create_storage(settings)
-    hub = RoomHub()
+    hub = RoomHub(
+        settings.empty_room_grace_seconds, on_empty=lambda room_id: close_room(sessionmaker, storage, room_id)
+    )
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        # Connections don't survive a restart, so every open room starts out empty: its members
+        # have the grace period to reconnect before it closes.
+        # A database that isn't ready must not stop the API starting; those rooms still close on time.
+        try:
+            async with sessionmaker() as session:
+                for room_id in await session.scalars(select(Room.id).where(Room.status == RoomStatus.ACTIVE)):
+                    hub.watch_empty(room_id)
+        except Exception:
+            logging.getLogger("coderoom").exception("Could not look up open rooms to watch for being empty")
         cleanup_task = None
         if settings.cleanup_in_app:
             cleanup_task = asyncio.create_task(CleanupWorker(sessionmaker, storage, settings).run_forever())

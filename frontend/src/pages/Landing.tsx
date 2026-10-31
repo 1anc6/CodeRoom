@@ -66,7 +66,7 @@ export function Landing() {
             </h1>
             <p className="hero__lead rise" style={stagger(1)}>
               Open a room, read the code out loud, and chat and pass files with whoever types it in. When time runs
-              out, the room and everything in it is gone.
+              out or everyone leaves, the room and everything in it is gone.
             </p>
             <p className="hero__aside rise" style={stagger(2)}>
               Someone gave you a code?{" "}

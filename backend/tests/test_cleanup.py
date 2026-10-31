@@ -320,6 +320,78 @@ def test_open_socket_is_told_the_room_expired_after_cleanup(live_client):
     assert closed.value.code == CLOSE_ROOM_EXPIRED
 
 
+# --- Rooms everyone has left ----------------------------------------------------------
+
+
+async def test_last_member_leaving_deletes_the_room_at_once(app, client):
+    alice = await create_room(client)
+    bob = await join_room(client, alice["code"])
+    await upload(client, alice)
+    await add_message(app, bob)
+
+    assert (await client.delete(f"/api/rooms/{bob['room']['id']}/leave", headers=auth(bob["token"]))).status_code == 204
+    assert await room_status(app, alice) == RoomStatus.ACTIVE
+
+    assert (
+        await client.delete(f"/api/rooms/{alice['room']['id']}/leave", headers=auth(alice["token"]))
+    ).status_code == 204
+    assert await room_status(app, alice) == RoomStatus.DELETED
+    assert await row_counts(app, alice) == {"participants": 0, "messages": 0, "files": 0}
+    assert stored_keys(app, alice) == []
+
+    # The code is free again straight away.
+    response = await client.post("/api/rooms/join", json={"code": alice["code"], "display_name": "Carol"})
+    assert response.status_code == 404
+
+
+def _wait_for_status(client, member: dict, wanted: str) -> str:
+    async def _wait(app) -> str:
+        for _ in range(100):
+            if await room_status(app, member) == wanted:
+                break
+            await asyncio.sleep(0.05)
+        return await room_status(app, member)
+
+    return client.portal.call(_wait, client.app)
+
+
+def _connect(client, member: dict):
+    ws = client.websocket_connect(f"/api/rooms/{member['room']['id']}/ws")
+    session = ws.__enter__()
+    session.send_json({"type": "auth", "token": member["token"]})
+    assert session.receive_json()["type"] == "ready"
+    return ws
+
+
+def test_room_everyone_has_disconnected_from_is_deleted_after_the_grace_period(make_settings, live_client_factory):
+    with live_client_factory(make_settings(empty_room_grace_seconds=0.3)) as client:
+        alice = client.post("/api/rooms", json={"display_name": "Alice"}).json()
+        _connect(client, alice).__exit__(None, None, None)
+        assert _wait_for_status(client, alice, RoomStatus.DELETED) == RoomStatus.DELETED
+
+        response = client.get(f"/api/rooms/{alice['room']['id']}", headers=auth(alice["token"]))
+        assert response.status_code == 410
+
+
+def test_reconnecting_within_the_grace_period_keeps_the_room(make_settings, live_client_factory):
+    with live_client_factory(make_settings(empty_room_grace_seconds=0.5)) as client:
+        alice = client.post("/api/rooms", json={"display_name": "Alice"}).json()
+        _connect(client, alice).__exit__(None, None, None)
+        ws = _connect(client, alice)  # a refresh
+        try:
+            client.portal.call(asyncio.sleep, 1)
+            assert client.portal.call(room_status, client.app, alice) == RoomStatus.ACTIVE
+        finally:
+            ws.__exit__(None, None, None)
+        assert _wait_for_status(client, alice, RoomStatus.DELETED) == RoomStatus.DELETED
+
+
+def test_room_nobody_ever_connects_to_is_deleted(make_settings, live_client_factory):
+    with live_client_factory(make_settings(empty_room_grace_seconds=0.3)) as client:
+        alice = client.post("/api/rooms", json={"display_name": "Alice"}).json()
+        assert _wait_for_status(client, alice, RoomStatus.DELETED) == RoomStatus.DELETED
+
+
 # --- Background worker ----------------------------------------------------------------
 
 

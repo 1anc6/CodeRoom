@@ -19,6 +19,8 @@ interface RoomHeaderProps {
   session: RoomSession;
   connection: Connection;
   onLeave: () => Promise<void>;
+  /** Leaving would close the room, since nobody else is in it. */
+  lastOne: boolean;
   onPresent: () => void;
 }
 
@@ -26,7 +28,7 @@ interface RoomHeaderProps {
  * One bar: the room's code as the page title, its connection and closing time, and the way out.
  * The time left runs along its bottom edge.
  */
-export function RoomHeader({ session, connection, onLeave, onPresent }: RoomHeaderProps) {
+export function RoomHeader({ session, connection, onLeave, lastOne, onPresent }: RoomHeaderProps) {
   const now = useNow(1000);
   const created = parseServerTime(session.room.created_at);
   const expires = parseServerTime(session.room.expires_at);
@@ -94,8 +96,14 @@ export function RoomHeader({ session, connection, onLeave, onPresent }: RoomHead
         <ThemeToggle className="icon-btn--small" />
         {confirming ? (
           <span className="leave-confirm">
-            <button type="button" className="btn btn--small" onClick={leave} disabled={leaving}>
-              {leaving ? "Leaving…" : "Yes, leave"}
+            <button
+              type="button"
+              className="btn btn--small"
+              onClick={leave}
+              disabled={leaving}
+              title={lastOne ? "You're the last one here: the room and everything in it will be deleted" : undefined}
+            >
+              {leaving ? "Leaving…" : lastOne ? "Yes, close room" : "Yes, leave"}
             </button>
             <button type="button" className="btn btn--small btn--quiet" onClick={() => setConfirming(false)}>
               Stay

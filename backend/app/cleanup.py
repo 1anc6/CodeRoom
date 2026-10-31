@@ -7,6 +7,8 @@ Each run:
    participants, then mark it `deleted`. If storage deletion fails the room stays `deleting`
    and the next run retries; every step is safe to repeat.
 
+Rooms everyone has left don't wait for this: close_room revokes and purges them straight away.
+
 Reconcile (less often) removes stored objects the database doesn't account for: leftovers of
 deleted rooms, uploads that were interrupted before being recorded, and abandoned partial writes.
 
@@ -77,6 +79,27 @@ async def purge_room(sessionmaker: async_sessionmaker[AsyncSession], storage: Fi
         room.status = RoomStatus.DELETED
         await session.commit()
         return True
+
+
+async def close_room(sessionmaker: async_sessionmaker[AsyncSession], storage: FileStorage, room_id: uuid.UUID) -> bool:
+    """Close an open room now, before its time is up (everyone has left), and purge it at once.
+    Returns False if the room was not open. If the purge fails the room stays `deleting` and the
+    next cleanup run retries it."""
+    async with sessionmaker() as session:
+        result = await session.execute(
+            update(Room)
+            .where(Room.id == room_id, Room.status == RoomStatus.ACTIVE)
+            .values(status=RoomStatus.DELETING)
+            .execution_options(synchronize_session=False)
+        )
+        await session.commit()
+    if not result.rowcount:
+        return False
+    try:
+        await purge_room(sessionmaker, storage, room_id)
+    except Exception:
+        logger.exception("Could not delete room %s; it stays revoked and will be retried", room_id)
+    return True
 
 
 async def run_cleanup(
