@@ -21,12 +21,12 @@
   --danger-bg: #f3e3df;
   color-scheme: light;
 
-  /* Two faces. Luxurious Roman, a high-contrast roman, for the big headlines and the wordmark only:
-     its hairlines need size. Jost, a geometric sans, for everything else, headings in the room
-     included, and for codes, with tabular figures for clocks and sizes. Neither is ever faked
-     bold or italic (font-synthesis: none on html). */
-  --font-display: "Luxurious Roman", "Didot", "Bodoni MT", Georgia, serif;
-  --font-text: "Jost", system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Two faces. Bricolage Grotesque, a grotesque with ink traps and a width axis, set heavy and a
+     little narrow for the big headlines and the wordmark only. Instrument Sans, a plain sans, for
+     everything else, headings in the room included, and for codes, with tabular figures for clocks
+     and sizes. Neither is ever faked bold or italic (font-synthesis: none on html). */
+  --font-display: "Bricolage Grotesque", "Arial Narrow", system-ui, sans-serif;
+  --font-text: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
 
   --step-small: clamp(0.8125rem, 0.79rem + 0.1vw, 0.875rem);
   --step-body: clamp(1rem, 0.96rem + 0.2vw, 1.125rem);
@@ -252,9 +252,10 @@ video {
   align-items: center;
   gap: 10px;
   font-family: var(--font-display);
-  font-weight: 400;
-  font-size: 1.625rem;
-  letter-spacing: 0;
+  font-weight: 700;
+  font-stretch: 88%;
+  font-size: 1.5rem;
+  letter-spacing: -0.02em;
   line-height: 1;
   text-decoration: none;
 }

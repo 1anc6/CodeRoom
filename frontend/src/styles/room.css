@@ -1443,9 +1443,11 @@ button.file__name:hover {
 .ended h1 {
   margin-top: 32px;
   font-family: var(--font-display);
-  font-weight: 400;
+  font-weight: 700;
+  font-stretch: 85%;
   font-size: clamp(2rem, 1.4rem + 2.4vw, 3.25rem);
-  line-height: 1.05;
+  line-height: 1;
+  letter-spacing: -0.03em;
 }
 
 .ended p {
